@@ -12,8 +12,16 @@ class InputFeatures(object):
     self.pl_ids = pl_ids
     self.id = id
 
+class ClassierFeatures(object):
+  def __init__(self,nl_tokens,nl_ids,pl_tokens,pl_ids,label):
+    self.nl_tokens = nl_tokens
+    self.nl_id = nl_ids
+    self.pl_tokens = pl_tokens
+    self.pl_ids = pl_ids 
+    self.label = label
+
 # 把数据转换成模型能够处理的形式
-def convert_examples_to_features(js,tokenizer,id):
+def convert_examples_to_features(js,tokenizer,id,classifier=False):
     nl = ' '.join(js['docstring_tokens'])
     nl_tokens = tokenizer.tokenize(nl)
     nl_tokens = nl_tokens[:config.max_seq_length-2]
@@ -30,7 +38,11 @@ def convert_examples_to_features(js,tokenizer,id):
     padding_length = config.max_seq_length - len(pl_ids)
     pl_ids += [tokenizer.pad_token_id]*padding_length
 
-    return InputFeatures(nl_tokens,nl_ids,pl_tokens,pl_ids,id)
+    if classifier:
+      label = js['label']
+      return ClassierFeatures(nl_tokens,nl_ids,pl_tokens,pl_ids,label)
+    else:
+      return InputFeatures(nl_tokens,nl_ids,pl_tokens,pl_ids,id)
     
 def print_features(features):
   for f in features:
