@@ -9,6 +9,9 @@ from eval_encoder import eval_encoder
 
 config = Config()
 def train_encoder(train_dataloader,eval_dataloader,encoder):
+  if not os.path.exists(config.saved_path):
+    os.makedirs(config.saved_path)
+
   if config.use_cuda:
     encoder = encoder.cuda()
 
