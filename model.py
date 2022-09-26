@@ -51,7 +51,7 @@ class SimpleCasClassifier(nn.Module):
     code_vec,nl_vec = self.encoder(pl_inputs,nl_inputs)
     inputs = torch.cat((code_vec,nl_vec),1)
     outputs = self.fc(inputs)
-    outputs = torch.softmax(outputs,dim=-1)
+    #outputs = torch.softmax(outputs,dim=-1)
     return outputs
 
 
