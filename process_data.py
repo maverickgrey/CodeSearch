@@ -1,4 +1,5 @@
 import json
+from msilib.schema import File
 import random
 import os
 import re
@@ -10,6 +11,68 @@ import string
 2、对一些质量不好的数据进行一定的处理（如过滤掉等）
 3、对源数据中的一些本项目用不到的属性进行过滤
 """
+
+class DataFilterer:
+    def __init__(self,data_path,data=None):
+        if data is None:
+            self.data_path = data_path
+            self.data = self.load_data(self.data_path)
+        else:
+            self.data = data
+
+    def filt(self,data):
+        result = []
+        for i in range(len(data)):
+            if self.too_short(data[i]):
+                continue
+            elif self.has_chinese(data[i]):
+                continue
+            else:
+                data[i].nl_tokens = self.too_long(data[i])
+                result.append(data[i])
+        return result
+
+    def load_data(self,data_path):
+        data = []
+        with open(data_path,'r') as f:
+            for line in f.readlines():
+                js = json.loads(line)
+                data.append(TrainData(js['code_tokens'],js['docstring_tokens'],js['code'],js['docstring']))
+        return data
+    
+    # 一些过滤规则，True则应该过滤，False则不应该过滤
+    # 第一条过滤规则：nl_tokens长度过小的数据需要被过滤.注意，判断nl_tokens的长度是在去除标点符号后判断的
+    def too_short(self,example):
+        punc = string.punctuation
+        nl_tokens = example.nl_tokens
+        length = 0
+        for token in nl_tokens:
+            if token not in punc:
+                length += 1
+        return True if length<=3 else False
+    
+    # 第二条过滤规则：将中文的NL过滤出去，因为它们在数据集中是以unicode的形式存储的，这在模型中无法提供有用的语义信息
+    def has_chinese(self,example):
+        nl = example.docstring
+        for str in nl:
+            if u'\u4e00' <= str <= u'\u9fff':
+                return True
+        return False
+    
+    # 第三条规则：考虑将一些过长的nl_tokens截断(考虑截断tokens长度大于20的，从第一个句号前截断)
+    def too_long(self,example):
+        if len(example.nl_tokens) > 20:
+            nl_tokens = example.nl_tokens
+            loc = len(nl_tokens)-1
+            for index in range(len(nl_tokens)):
+                if nl_tokens[index] == ".":
+                    loc = index
+                    break
+            return nl_tokens[:loc+1]
+        else:
+            return example.nl_tokens
+    
+
 class TrainData:
     def __init__(self,code_tokens,nl_tokens,code,docstring) -> None:
         self.code_tokens = code_tokens
@@ -25,8 +88,11 @@ class TargetData:
         self.code = code
         self.docstring = docstring
 
-def process(shuffle = False):
+
+def process(filter=True,shuffle = False):
     path_prefix = "./CodeSearchNet/java_train_"
+    data_filter = None
+
     for i in range(1):
         postfix = str(i)+".jsonl"
         data_path = path_prefix+postfix
@@ -43,7 +109,9 @@ def process(shuffle = False):
                 code = js['code']
                 docstring = js['docstring']
                 data.append(TrainData(code_tokens,nl_tokens,code,docstring))
-        examples = build_examples(data,shuffle)
+        if filter:
+            data_filter = DataFilterer(data)
+        examples = build_examples(data,data_filter,shuffle)
         with open(out_path,'w') as ft:
             for example in examples:
                 js = {}
@@ -56,7 +124,7 @@ def process(shuffle = False):
 
 
 # 构建正样本和负样本
-def build_examples(data,shuffle=False):
+def build_examples(data,filter=None,shuffle=False):
     result = []
     for i in range(len(data)):
         # 正样本
@@ -78,8 +146,10 @@ def build_examples(data,shuffle=False):
         result.append(negative2)
     if shuffle:
         shuffle_data(result)
-    result = filter_data(result)
-    stat_nltokens(result)
+    if filter is not None:
+        result = filter.filt(result)
+
+    #stat_nltokens(result)
     return result
 
 # 将得到的样本随机打乱
@@ -88,52 +158,6 @@ def shuffle_data(data):
         loc = random.randint(0,len(data)-1)
         if loc != i:
             data[i],data[loc] = data[loc],data[i]
-
-# 过滤函数
-def filter_data(data):
-    result = []
-    for i in range(len(data)):
-        if too_short(data[i]):
-            continue
-        elif has_chinese(data[i]):
-            continue
-        else:
-            data[i].nl_tokens = too_long(data[i])
-            result.append(data[i])
-    return result
-        
-
-# 一些过滤规则，True则应该过滤，False则不应该过滤
-# 第一条过滤规则：nl_tokens长度过小的数据需要被过滤.注意，判断nl_tokens的长度是在去除标点符号后判断的
-def too_short(example):
-    punc = string.punctuation
-    nl_tokens = example.nl_tokens
-    length = 0
-    for token in nl_tokens:
-        if token not in punc:
-            length += 1
-    return True if length<=3 else False
-
-# 第二条过滤规则：将中文的NL过滤出去，因为它们在数据集中是以unicode的形式存储的，这在模型中无法提供有用的语义信息
-def has_chinese(example):
-    nl = example.docstring
-    for str in nl:
-        if u'\u4e00' <= str <= u'\u9fff':
-            return True
-    return False
-
-# 第三条规则：考虑将一些过长的nl_tokens截断(考虑截断tokens长度大于20的，从第一个句号前截断)
-def too_long(example):
-    if len(example.nl_tokens) > 20:
-        nl_tokens = example.nl_tokens
-        loc = len(nl_tokens)-1
-        for index in range(len(nl_tokens)):
-            if nl_tokens[index] == ".":
-                loc = index
-                break
-        return nl_tokens[:loc+1]
-    else:
-        return example.nl_tokens
 
 
 # 对样本的nl_tokens的长度进行统计
@@ -162,7 +186,25 @@ def stat_nltokens(data):
                 f.write(json.dumps(js)+"\n")
     print(stat)
 
-process(shuffle=True)
+def filt_encoder_data():
+    prefix = "./CodeSearchNet/java_train_"
+    for i in range(1):
+        train_path = prefix + str(i)+".jsonl"
+        out_path = "./CodeSearchNet/java_train_f_"+str(i)+".jsonl"
+        filter = DataFilterer(train_path)
+        result = filter.filt(filter.data)
+        with open(out_path,'w') as f:
+            for example in result:
+                js = {}
+                js['docstring'] = example.docstring
+                js['docstring_tokens'] = example.nl_tokens
+                js['code'] = example.code
+                js['code_tokens'] = example.code_tokens
+                f.write(json.dumps(js)+"\n")
 
+
+
+#process(shuffle=True)
+filt_encoder_data()
 
 
