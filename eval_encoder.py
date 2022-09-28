@@ -7,8 +7,7 @@ import json
 from utils import cos_similarity,get_priliminary
 
 
-config = Config()
-def eval_encoder(dataloader,encoder,test = False):
+def eval_encoder(dataloader,encoder,config,test = False):
   if os.path.exists(config.model_save_path+"/encoder.pt"):
     encoder.load_state_dict(torch.load(config.model_save_path+"/encoder.pt"))
 
@@ -66,7 +65,7 @@ def eval_encoder(dataloader,encoder,test = False):
     return scores
 
 #用测试集对encoder进行测试，并且对NL查询按相似度排序返回结果
-def test_encoder(dataloader,encoder,dataset,log = False,ret = False):
+def test_encoder(dataloader,encoder,dataset,config,log = False,ret = False):
     test_result_path = config.data_path+"java_test_0.jsonl"
     if (ret == True and log == True):
         scores = eval_encoder(dataloader,encoder,True)

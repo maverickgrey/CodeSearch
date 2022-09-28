@@ -4,8 +4,7 @@ import torch
 import torch.nn as nn
 import os
 
-config = Config()
-def eval_classifier(dataloader,classifier):
+def eval_classifier(dataloader,classifier,config):
     if os.path.exists(config.saved_path+"/classifier.pt"):
         classifier.load_state_dict(torch.load(config.saved_path+"/classifier.pt"))
     total_loss = 0
@@ -43,5 +42,5 @@ def eval_classifier(dataloader,classifier):
     print("avg_loss:{},acc:{}".format(total_loss/total_step,acc))
 
         
-def test_classifer(dataloader,classifer):
-    eval_classifier(dataloader,classifer)
+def test_classifer(dataloader,classifer,config):
+    eval_classifier(dataloader,classifer,config)

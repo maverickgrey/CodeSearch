@@ -3,7 +3,7 @@ import torch
 import math
 import numpy as np
 
-config = Config()
+
 class InputFeatures(object):
   def __init__(self,nl_tokens,nl_ids,pl_tokens,pl_ids,id):
     self.nl_tokens = nl_tokens
@@ -12,35 +12,35 @@ class InputFeatures(object):
     self.pl_ids = pl_ids
     self.id = id
 
-class ClassierFeatures(object):
+class ClassifierFeatures(object):
   def __init__(self,nl_tokens,nl_ids,pl_tokens,pl_ids,label):
     self.nl_tokens = nl_tokens
-    self.nl_id = nl_ids
+    self.nl_ids = nl_ids
     self.pl_tokens = pl_tokens
     self.pl_ids = pl_ids 
     self.label = label
 
 # 把数据转换成模型能够处理的形式
-def convert_examples_to_features(js,tokenizer,id,classifier=False):
+def convert_examples_to_features(js,id,config,classifier=False):
     nl = ' '.join(js['docstring_tokens'])
-    nl_tokens = tokenizer.tokenize(nl)
+    nl_tokens = config.tokenizer.tokenize(nl)
     nl_tokens = nl_tokens[:config.max_seq_length-2]
-    nl_tokens = [tokenizer.cls_token]+nl_tokens+[tokenizer.sep_token]
-    nl_ids = tokenizer.convert_tokens_to_ids(nl_tokens)
+    nl_tokens = [config.tokenizer.cls_token]+nl_tokens+[config.tokenizer.sep_token]
+    nl_ids = config.tokenizer.convert_tokens_to_ids(nl_tokens)
     padding_length = config.max_seq_length - len(nl_ids)
-    nl_ids += [tokenizer.pad_token_id]*padding_length
+    nl_ids += [config.tokenizer.pad_token_id]*padding_length
 
     pl = ' '.join(js['code_tokens'])
-    pl_tokens = tokenizer.tokenize(pl)
+    pl_tokens = config.tokenizer.tokenize(pl)
     pl_tokens = pl_tokens[:config.max_seq_length-2]
-    pl_tokens = [tokenizer.cls_token]+pl_tokens+[tokenizer.sep_token]
-    pl_ids = tokenizer.convert_tokens_to_ids(pl_tokens)
+    pl_tokens = [config.tokenizer.cls_token]+pl_tokens+[config.tokenizer.sep_token]
+    pl_ids = config.tokenizer.convert_tokens_to_ids(pl_tokens)
     padding_length = config.max_seq_length - len(pl_ids)
-    pl_ids += [tokenizer.pad_token_id]*padding_length
+    pl_ids += [config.tokenizer.pad_token_id]*padding_length
 
     if classifier:
       label = js['label']
-      return ClassierFeatures(nl_tokens,nl_ids,pl_tokens,pl_ids,label)
+      return ClassifierFeatures(nl_tokens,nl_ids=nl_ids,pl_tokens=pl_tokens,pl_ids=pl_ids,label=label)
     else:
       return InputFeatures(nl_tokens,nl_ids,pl_tokens,pl_ids,id)
     
@@ -79,7 +79,7 @@ def get_priliminary(scores,dataset,K):
     res = []
     for index in sort_id:
       res.append(examples[index])
-    result.append(res)
+    result.append(res[:K])
   return result,examples
 
 def read_priliminary(results):
@@ -89,7 +89,7 @@ def read_priliminary(results):
 
 
 # 在用快速编码器得到初步的结果之后，用慢速分类器对初步的结果进行re-rank
-def rerank(results,examples,classifier):
+def rerank(results,examples,classifier,config):
   final = []
   for i in range(len(results)):
     example = examples[i]

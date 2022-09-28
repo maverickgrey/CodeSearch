@@ -1,5 +1,4 @@
 import json
-from msilib.schema import File
 import random
 import os
 import re
@@ -13,14 +12,14 @@ import string
 """
 
 class DataFilterer:
-    def __init__(self,data_path,data=None):
+    def __init__(self,data_path=None,data=None):
         if data is None:
             self.data_path = data_path
             self.data = self.load_data(self.data_path)
         else:
             self.data = data
 
-    def filt(self,data):
+    def filter(self,data):
         result = []
         for i in range(len(data)):
             if self.too_short(data[i]):
@@ -90,10 +89,10 @@ class TargetData:
 
 
 def process(filter=True,shuffle = False):
-    path_prefix = "./CodeSearchNet/java_train_"
+    path_prefix = "./CodeSearchNet/origin_data/java_train_"
     data_filter = None
 
-    for i in range(1):
+    for i in range(16):
         postfix = str(i)+".jsonl"
         data_path = path_prefix+postfix
         out_path = "./CodeSearchNet/classifier/ctrain_"+postfix
@@ -110,12 +109,12 @@ def process(filter=True,shuffle = False):
                 docstring = js['docstring']
                 data.append(TrainData(code_tokens,nl_tokens,code,docstring))
         if filter:
-            data_filter = DataFilterer(data)
+            data_filter = DataFilterer(data=data)
         examples = build_examples(data,data_filter,shuffle)
         with open(out_path,'w') as ft:
             for example in examples:
                 js = {}
-                js['nl'] = example.docstring
+                js['docstring'] = example.docstring
                 js['docstring_tokens'] = example.nl_tokens
                 js['code_tokens'] = example.code_tokens
                 js['code'] = example.code
@@ -124,7 +123,7 @@ def process(filter=True,shuffle = False):
 
 
 # 构建正样本和负样本
-def build_examples(data,filter=None,shuffle=False):
+def build_examples(data,data_filter=None,shuffle=False):
     result = []
     for i in range(len(data)):
         # 正样本
@@ -146,8 +145,8 @@ def build_examples(data,filter=None,shuffle=False):
         result.append(negative2)
     if shuffle:
         shuffle_data(result)
-    if filter is not None:
-        result = filter.filt(result)
+    if data_filter is not None:
+        result = data_filter.filter(result)
 
     #stat_nltokens(result)
     return result
@@ -186,11 +185,13 @@ def stat_nltokens(data):
                 f.write(json.dumps(js)+"\n")
     print(stat)
 
-def filt_encoder_data():
-    prefix = "./CodeSearchNet/java_train_"
-    for i in range(1):
+def filter_encoder_data():
+    prefix = "./CodeSearchNet/origin_data/java_train_"
+    if not os.path.exists("CodeSearchNet/filted_data"):
+        os.mkdir("CodeSearchNet/filted_data")
+    for i in range(16):
         train_path = prefix + str(i)+".jsonl"
-        out_path = "./CodeSearchNet/java_train_f_"+str(i)+".jsonl"
+        out_path = "./CodeSearchNet/filted_data/java_train_f_"+str(i)+".jsonl"
         filter = DataFilterer(train_path)
         result = filter.filt(filter.data)
         with open(out_path,'w') as f:
@@ -204,7 +205,7 @@ def filt_encoder_data():
 
 
 
-#process(shuffle=True)
-filt_encoder_data()
+process(shuffle=True)
+#filter_encoder_data()
 
 

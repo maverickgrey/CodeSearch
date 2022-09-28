@@ -7,8 +7,8 @@ import os
 from utils import cos_similarity
 from eval_encoder import eval_encoder
 
-config = Config()
-def train_encoder(train_dataloader,eval_dataloader,encoder):
+
+def train_encoder(train_dataloader,eval_dataloader,encoder,config):
   if not os.path.exists(config.saved_path):
     os.makedirs(config.saved_path)
 
