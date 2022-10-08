@@ -203,9 +203,26 @@ def filter_encoder_data():
                 js['code_tokens'] = example.code_tokens
                 f.write(json.dumps(js)+"\n")
 
-
-
-process(shuffle=True)
-#filter_encoder_data()
-
-
+# 把所有的训练数据弄到一个文件里
+def converge():
+    prefix = "./CodeSearchNet/classifier/ctrain_"
+    out_path = "./CodeSearchNet/classifier/java_train_cl.jsonl"
+    f = open(out_path,'a')
+    for train_no in range(16):
+        postfix = str(train_no)+".jsonl"
+        data_path = prefix+postfix
+        with open(data_path,'r') as d:
+            for line in d.readlines():
+                read = {}
+                js = json.loads(line)
+                read['docstring'] = js['docstring']
+                read['docstring_tokens'] = js['docstring_tokens']
+                read['code'] = js['code']
+                read['code_tokens'] = js['code_tokens']
+                read['label'] = js['label']
+                f.write(json.dumps(read)+'\n')
+    f.close()
+    
+# process(shuffle=True)
+# filter_encoder_data()
+converge()

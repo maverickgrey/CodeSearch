@@ -61,7 +61,7 @@ class CodeSearchDataset(Dataset):
                     #   break
             return examples
 
-# 专门用来训练Classifier的数据集
+# 专门用来训练Classifier的数据集，训练集在16个文件中，需要指定训练哪个数据集
 class ClassifierDataset(Dataset):
     def __init__(self,config,train_no,mode='train'):
         self.config = config
@@ -79,6 +79,38 @@ class ClassifierDataset(Dataset):
             postfix = self.config.data_path+"/classifier/ctrain_"
             train_path = postfix + str(self.train_no)+".jsonl"
             with open(train_path,'r') as f:
+                for line in f.readlines():
+                    js = json.loads(line)
+                    example = convert_examples_to_features(js,-1,self.config,True)
+                    examples.append(example)
+            return examples
+
+    def __getitem__(self, index):
+        pl_ids = self.data[index].pl_ids
+        nl_ids = self.data[index].nl_ids
+        label = self.data[index].label
+        return (torch.tensor(pl_ids),torch.tensor(nl_ids),torch.tensor(label))
+    
+    def __len__(self):
+        return len(self.data)
+
+
+# 专门用来训练Classifier的数据集,但是训练集全在一个文件中
+class ClassifierDataset2(Dataset):
+    def __init__(self,config,mode='train'):
+        self.config = config
+        self.mode = mode
+        self.data = self.load_examples(self.mode)
+    
+    def load_examples(self,mode):
+        if mode == 'eval':
+            pass
+        elif mode == 'test':
+            pass
+        else:
+            examples = []
+            path = "./CodeSearchNet/classifier/java_train_cl.jsonl"
+            with open(path,'r') as f:
                 for line in f.readlines():
                     js = json.loads(line)
                     example = convert_examples_to_features(js,-1,self.config,True)
