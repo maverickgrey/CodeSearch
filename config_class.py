@@ -6,7 +6,7 @@ class Config:
                 data_path = "./CodeSearchNet",
                 saved_path = "./model_saved",
                 train_batch_size = 8,
-                eval_batch_size = 32,
+                eval_batch_size = 8,
                 use_cuda = True,
                 max_seq_length=512,
                 filter_K = 100

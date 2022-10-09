@@ -1,4 +1,5 @@
 from asyncio.log import logger
+from audioop import avg
 from config_class import Config
 import os
 import torch
@@ -7,6 +8,7 @@ from dataset import ClassifierDataset,ClassifierDataset2
 from transformers import RobertaConfig,get_linear_schedule_with_warmup
 from torch.utils.data import DataLoader
 from model import SimpleCasClassifier
+from eval_classifier import eval_classifier
 
 def train_classifier(dataloader,classifier,config):
     if not os.path.exists(config.saved_path):
@@ -54,8 +56,17 @@ def train_classifier(dataloader,classifier,config):
                 print(log)
                 log_file.write(log+"\n")
                 log_file.close()
+            if step%40000 == 0:
+                log_file = open('./model_saved/log.txt','a')
+                log = "开始evaluation..."
+                print(log)
+                log_file.write(log+"\n")
+                avg_loss,acc = eval_classifier(dataloader,classifier,config,True)
+                log_file.write("evaluation: avg_{},acc:{}".format(avg_loss,acc))
+                log_file.close()
+
         torch.save(classifier.state_dict(),config.saved_path+"/classifier3.pt")
-        torch.save(optimizer.state_dict(),config.saved_path+"/c_optimmizer3.pt")
+        torch.save(optimizer.state_dict(),config.saved_path+"/c_optimizer3.pt")
         torch.save(scheduler.state_dict(),config.saved_path+"/c_scheduler3.pt")
 
 def train_classifier2(classifier,config):

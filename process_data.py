@@ -11,6 +11,21 @@ import string
 3、对源数据中的一些本项目用不到的属性进行过滤
 """
 
+class TrainData:
+    def __init__(self,code_tokens,nl_tokens,code,docstring) -> None:
+        self.code_tokens = code_tokens
+        self.nl_tokens = nl_tokens
+        self.code = code
+        self.docstring = docstring
+
+class TargetData:
+    def __init__(self,label,code_tokens,nl_tokens,code,docstring) -> None:
+        self.label = label
+        self.code_tokens = code_tokens
+        self.nl_tokens = nl_tokens
+        self.code = code
+        self.docstring = docstring
+
 class DataFilterer:
     def __init__(self,data_path=None,data=None):
         if data is None:
@@ -72,23 +87,8 @@ class DataFilterer:
             return example.nl_tokens
     
 
-class TrainData:
-    def __init__(self,code_tokens,nl_tokens,code,docstring) -> None:
-        self.code_tokens = code_tokens
-        self.nl_tokens = nl_tokens
-        self.code = code
-        self.docstring = docstring
-
-class TargetData:
-    def __init__(self,label,code_tokens,nl_tokens,code,docstring) -> None:
-        self.label = label
-        self.code_tokens = code_tokens
-        self.nl_tokens = nl_tokens
-        self.code = code
-        self.docstring = docstring
-
-
-def process(filter=True,shuffle = False):
+# 用来处理多文件数据集
+def process_files(filter=True,shuffle = False):
     path_prefix = "./CodeSearchNet/origin_data/java_train_"
     data_filter = None
 
@@ -121,6 +121,29 @@ def process(filter=True,shuffle = False):
                 js['label'] = example.label
                 ft.write(json.dumps(js)+"\n")
 
+# 处理单文件数据
+def process_a_file(data_path,out_path,filter=False,shuffle=False):
+    data = []
+    with open(data_path,'r') as f:
+        for line in f.readlines():
+            js = json.loads(line)
+            code_tokens = js['code_tokens']
+            code = js['code']
+            docstring = js['docstring']
+            docstring_tokens = js['docstring_tokens']
+            data.append(TrainData(code_tokens,docstring_tokens,code,docstring))
+    filterer = DataFilterer(data=data) if filter else None
+    data = build_examples(data,filterer,shuffle)
+    with open(out_path,'w') as ft:
+        for _data in data:
+            js = {}
+            js['docstring'] = _data.docstring
+            js['docstring_tokens'] = _data.nl_tokens
+            js['code'] = _data.code
+            js['code_tokens'] = _data.code_tokens
+            js['label'] = _data.label
+            ft.write(json.dumps(js)+"\n")
+
 
 # 构建正样本和负样本
 def build_examples(data,data_filter=None,shuffle=False):
@@ -129,20 +152,14 @@ def build_examples(data,data_filter=None,shuffle=False):
         # 正样本
         positive = TargetData(1,data[i].code_tokens,data[i].nl_tokens,data[i].code,data[i].docstring)
 
-        # 负样本*2
+        # 负样本*1
         r1 = random.randint(0,len(data)-1)
         while(r1 == i):
             r1 = random.randint(0,len(data)-1)
         negative1 = TargetData(0,data[r1].code_tokens,data[i].nl_tokens,data[r1].code,data[i].docstring)
 
-        r2 = random.randint(0,len(data)-1)
-        while(r2 == r1 or r2 == i):
-            r2 = random.randint(0,len(data)-1)
-        negative2 = TargetData(0,data[r2].code_tokens,data[i].nl_tokens,data[r2].code,data[i].docstring)
-
         result.append(positive)
         result.append(negative1)
-        result.append(negative2)
     if shuffle:
         shuffle_data(result)
     if data_filter is not None:
@@ -206,7 +223,7 @@ def filter_encoder_data():
 # 把所有的训练数据弄到一个文件里
 def converge():
     prefix = "./CodeSearchNet/classifier/ctrain_"
-    out_path = "./CodeSearchNet/classifier/java_train_cl.jsonl"
+    out_path = "./CodeSearchNet/classifier/java_train_c.jsonl"
     f = open(out_path,'a')
     for train_no in range(16):
         postfix = str(train_no)+".jsonl"
@@ -225,4 +242,10 @@ def converge():
     
 # process(shuffle=True)
 # filter_encoder_data()
-converge()
+# converge()
+
+if __name__ == "__main__":
+    # eval_path = "./CodeSearchNet/origin_data/java_valid_0.jsonl"
+    # out_path = "./CodeSearchNet/classifier/cvalid_0.jsonl"
+    # process_a_file(eval_path,out_path,True,True)
+    converge()
