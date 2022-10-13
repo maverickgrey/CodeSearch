@@ -6,6 +6,9 @@ import torch.nn as nn
 import os
 from utils import cos_similarity
 from eval_encoder import eval_encoder
+from dataset import CodeSearchDataset
+from torch.utils.data import DataLoader
+from model import CasEncoder
 
 
 def train_encoder(train_dataloader,eval_dataloader,encoder,config):
@@ -16,17 +19,17 @@ def train_encoder(train_dataloader,eval_dataloader,encoder,config):
     encoder = encoder.cuda()
 
   encoder.zero_grad()
-  optimizer = torch.optim.AdamW(encoder.parameters(),lr=5e-5)
+  optimizer = torch.optim.AdamW(encoder.parameters(),lr=1e-4)
   num_training_steps = len(train_dataloader)*config.epoches
-  scheduler = get_linear_schedule_with_warmup(optimizer,num_warmup_steps=1000,num_training_steps=num_training_steps)
+  scheduler = get_linear_schedule_with_warmup(optimizer,num_warmup_steps=num_training_steps/10,num_training_steps=num_training_steps)
   loss_func = torch.nn.CrossEntropyLoss()
 
-  if os.path.exists(config.model_save_path+"/encoder.pt"):
-    encoder.load_state_dict(torch.load(config.model_save_path+"/encoder.pt"))
-  if os.path.exists(config.model_save_path+"/e_optimizer.pt"):
-    optimizer.load_state_dict(torch.load(config.model_save_path+"/e_optimizer.pt"))
-  if os.path.exists(config.model_save_path+"/scheduler.pt"):
-    scheduler.load_state_dict(torch.load(config.model_save_path+"/scheduler.pt"))
+  if os.path.exists(config.saved_path+"/encoder.pt"):
+    encoder.load_state_dict(torch.load(config.saved_path+"/encoder.pt"))
+  if os.path.exists(config.saved_path+"/e_optimizer.pt"):
+    optimizer.load_state_dict(torch.load(config.saved_path+"/e_optimizer.pt"))
+  if os.path.exists(config.saved_path+"/e_cheduler.pt"):
+    scheduler.load_state_dict(torch.load(config.saved_path+"/e_scheduler.pt"))
     
   for epoch in range(config.epoches):
     total_loss = 0
@@ -49,8 +52,8 @@ def train_encoder(train_dataloader,eval_dataloader,encoder,config):
         CrossEntropy的输入则为bs*bs维的预测值及bs维的标签
       
       '''
-      scores = cos_similarity(nl_vecs,code_vecs)
-      # scores=(nl_vecs[:,None,:]*code_vecs[None,:,:]).sum(-1)
+      #scores = cos_similarity(nl_vecs,code_vecs)
+      scores=(nl_vecs[:,None,:]*code_vecs[None,:,:]).sum(-1)
       # print(scores)
       labels = torch.arange(code_vecs.shape[0])
       # print(labels)
@@ -72,6 +75,16 @@ def train_encoder(train_dataloader,eval_dataloader,encoder,config):
         print("epoch:{},step:{},avg_loss:{},current_loss:{}".format(epoch+1,step,total_loss/tr_num,current_loss))
       if step%5000 == 0:
         eval_encoder(eval_dataloader,encoder=encoder)
-    torch.save(encoder.state_dict(),config.model_save_path+"/encoder.pt")
-    torch.save(optimizer.state_dict(),config.model_save_path+"/e_optimizer.pt")
-    torch.save(scheduler.state_dict(),config.model_save_path+"/scheduler.pt")
+    torch.save(encoder.state_dict(),config.saved_path+"/encoder.pt")
+    torch.save(optimizer.state_dict(),config.saved_path+"/e_optimizer.pt")
+    torch.save(scheduler.state_dict(),config.saved_path+"/e_scheduler.pt")
+
+
+if __name__ == '__main__':
+  config = Config()
+  train_dataset = CodeSearchDataset(config,'train')
+  train_dataloader = DataLoader(train_dataset,config.train_batch_size)
+  eval_dataset = CodeSearchDataset(config,'eval')
+  eval_dataloader = DataLoader(eval_dataset,config.eval_batch_size)
+  encoder = CasEncoder()
+  train_encoder(train_dataloader,eval_dataloader,encoder,config)

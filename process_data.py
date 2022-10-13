@@ -41,6 +41,8 @@ class DataFilterer:
                 continue
             elif self.has_chinese(data[i]):
                 continue
+            elif self.has_java(data[i]):
+                continue
             else:
                 data[i].nl_tokens = self.too_long(data[i])
                 result.append(data[i])
@@ -85,6 +87,14 @@ class DataFilterer:
             return nl_tokens[:loc+1]
         else:
             return example.nl_tokens
+    
+    # 第四条规则：考虑将第一句中含有javadoc标识符的注释过滤掉
+    def has_java(self,example):
+        nl = example.docstring
+        nl = nl.split('.')
+        if '@' in nl[0]:
+            return True
+        return False
     
 
 # 用来处理多文件数据集
@@ -209,8 +219,8 @@ def filter_encoder_data():
     for i in range(16):
         train_path = prefix + str(i)+".jsonl"
         out_path = "./CodeSearchNet/filted_data/java_train_f_"+str(i)+".jsonl"
-        filter = DataFilterer(train_path)
-        result = filter.filt(filter.data)
+        data_filter = DataFilterer(train_path)
+        result = data_filter.filter(data_filter.data)
         with open(out_path,'w') as f:
             for example in result:
                 js = {}
@@ -222,8 +232,8 @@ def filter_encoder_data():
 
 # 把所有的训练数据弄到一个文件里
 def converge():
-    prefix = "./CodeSearchNet/classifier/ctrain_"
-    out_path = "./CodeSearchNet/classifier/java_train_c.jsonl"
+    prefix = "./CodeSearchNet/filted_data/java_train_f_"
+    out_path = "./CodeSearchNet/filted_data/java_train.jsonl"
     f = open(out_path,'a')
     for train_no in range(16):
         postfix = str(train_no)+".jsonl"
@@ -236,7 +246,7 @@ def converge():
                 read['docstring_tokens'] = js['docstring_tokens']
                 read['code'] = js['code']
                 read['code_tokens'] = js['code_tokens']
-                read['label'] = js['label']
+               # read['label'] = js['label']
                 f.write(json.dumps(read)+'\n')
     f.close()
     
@@ -245,7 +255,7 @@ def converge():
 # converge()
 
 if __name__ == "__main__":
-    # eval_path = "./CodeSearchNet/origin_data/java_valid_0.jsonl"
-    # out_path = "./CodeSearchNet/classifier/cvalid_0.jsonl"
-    # process_a_file(eval_path,out_path,True,True)
+    # train_path = "./CodeSearchNet/filted_data/java_train_all.jsonl"
+    # out_path = "./CodeSearchNet/filted_data/java_train.jsonl"
+    # process_a_file(train_path,out_path,True,True)
     converge()

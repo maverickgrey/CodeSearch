@@ -45,12 +45,12 @@ class CodeSearchDataset(Dataset):
             return examples
         else:
             num = 0
-            train_path = self.config.data_path +"/filted_data"+"/java_train_all.json"
+            train_path = self.config.data_path +"/filted_data"+"/java_train.jsonl"
             with open(train_path,'r') as f:
                 for line in f.readlines():
                     num+=1
                     js = json.loads(line)
-                    example = convert_examples_to_features(js,num,self.config,num)
+                    example = convert_examples_to_features(js,num,self.config,classifier=False)
                     examples.append(example)
                     # if num>9999:
                     #   break

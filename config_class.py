@@ -2,7 +2,7 @@ from transformers import RobertaModel,RobertaConfig,RobertaTokenizer
 
 class Config:
     def __init__(self,
-                epoches=4,
+                epoches=15,
                 data_path = "./CodeSearchNet",
                 saved_path = "./model_saved",
                 train_batch_size = 8,

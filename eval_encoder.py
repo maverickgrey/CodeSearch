@@ -32,7 +32,8 @@ def eval_encoder(dataloader,encoder,config,test = False):
 
     with torch.no_grad():
       code_vec,nl_vec = encoder(pl_ids,nl_ids)
-      scores = cos_similarity(nl_vec,code_vec)
+      # scores = cos_similarity(nl_vec,code_vec)
+      scores=(nl_vecs[:,None,:]*code_vecs[None,:,:]).sum(-1)
       labels = torch.arange(code_vec.shape[0])
       if config.use_cuda:
         labels = labels.cuda()

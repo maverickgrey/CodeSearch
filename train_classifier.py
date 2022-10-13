@@ -1,5 +1,3 @@
-from asyncio.log import logger
-from audioop import avg
 from config_class import Config
 import os
 import torch
@@ -16,17 +14,17 @@ def train_classifier(dataloader,classifier,config):
 
     classifier.zero_grad()
     loss_func = nn.CrossEntropyLoss()
-    optimizer = torch.optim.AdamW(classifier.parameters(),lr=4e-6)
+    optimizer = torch.optim.AdamW(classifier.parameters(),lr=3e-6)
     num_training = len(dataloader)*config.epoches
     scheduler = get_linear_schedule_with_warmup(optimizer,num_warmup_steps=num_training/10,num_training_steps=num_training)
 
 
-    if os.path.exists(config.saved_path+"/classifier3.pt"):
-        classifier.load_state_dict(torch.load(config.saved_path+"/classifier3.pt"))
-    if os.path.exists(config.saved_path+"/c_optimizer3.pt"):
-        optimizer.load_state_dict(torch.load(config.saved_path+"/c_optimizer3.pt"))
-    if os.path.exists(config.saved_path+"/scheduler3.pt"):
-        scheduler.load_state_dict(torch.load(config.saved_path+"/c_scheduler3.pt"))
+    if os.path.exists(config.saved_path+"/classifier.pt"):
+        classifier.load_state_dict(torch.load(config.saved_path+"/classifier.pt"))
+    if os.path.exists(config.saved_path+"/c_optimizer.pt"):
+        optimizer.load_state_dict(torch.load(config.saved_path+"/c_optimizer.pt"))
+    if os.path.exists(config.saved_path+"/scheduler.pt"):
+        scheduler.load_state_dict(torch.load(config.saved_path+"/c_scheduler.pt"))
     if config.use_cuda:
         classifier = classifier.cuda()
 
@@ -51,23 +49,23 @@ def train_classifier(dataloader,classifier,config):
             scheduler.step()
             total_step += 1
             if step%500 == 0:
-                log_file = open('./model_saved/log.txt','a')
+                log_file = open('./model_saved/log_epoch15.txt','a')
                 log = "epoch:{},step:{},avg_loss:{}".format(epoch+1,step,total_loss/total_step)
                 print(log)
                 log_file.write(log+"\n")
                 log_file.close()
-            if step%40000 == 0:
-                log_file = open('./model_saved/log.txt','a')
-                log = "开始evaluation..."
-                print(log)
-                log_file.write(log+"\n")
-                avg_loss,acc = eval_classifier(dataloader,classifier,config,True)
-                log_file.write("evaluation: avg_{},acc:{}".format(avg_loss,acc))
-                log_file.close()
+            # if step%40000 == 0:
+            #     log_file = open('./model_saved/log.txt','a')
+            #     log = "开始evaluation..."
+            #     print(log)
+            #     log_file.write(log+"\n")
+            #     avg_loss,acc = eval_classifier(dataloader,classifier,config,True)
+            #     log_file.write("evaluation: avg_{},acc:{}".format(avg_loss,acc))
+            #     log_file.close()
 
-        torch.save(classifier.state_dict(),config.saved_path+"/classifier3.pt")
-        torch.save(optimizer.state_dict(),config.saved_path+"/c_optimizer3.pt")
-        torch.save(scheduler.state_dict(),config.saved_path+"/c_scheduler3.pt")
+        torch.save(classifier.state_dict(),config.saved_path+"/classifier.pt")
+        torch.save(optimizer.state_dict(),config.saved_path+"/c_optimizer.pt")
+        torch.save(scheduler.state_dict(),config.saved_path+"/c_scheduler.pt")
 
 def train_classifier2(classifier,config):
     if not os.path.exists(config.saved_path):

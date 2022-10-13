@@ -10,8 +10,6 @@ def eval_classifier(dataloader,classifier,config,ret=False):
     if os.path.exists(config.saved_path+"/classifier3.pt"):
         classifier.load_state_dict(torch.load(config.saved_path+"/classifier3.pt"))
     classifier.zero_grad()
-    if config.use_cuda:
-        classifier = classifier.cuda()
     total_loss = 0
     total_step = 0
     correct = 0
@@ -29,8 +27,6 @@ def eval_classifier(dataloader,classifier,config,ret=False):
             label = label.cuda()
         logits = classifier(pl_ids,nl_ids)
         pred = torch.argmax(logits,dim=1)
-        print(logits)
-        print(pred)
         loss = loss_func(logits,label)
         total_loss += loss.item()
         total_step += 1
@@ -62,5 +58,7 @@ if __name__ == "__main__":
     dataset = ClassifierDataset(config,0,mode='eval')
     dataloader = DataLoader(dataset,batch_size=config.eval_batch_size)
     classifier = SimpleCasClassifier()
+    if config.use_cuda:
+        classifier = classifier.cuda()
     avg_loss,acc = eval_classifier(dataloader,classifier,config,True)
     print(avg_loss,acc)
