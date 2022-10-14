@@ -67,7 +67,9 @@ class CasClassifier(nn.Module):
 
   def forward(self,pl_inputs,nl_inputs):
     code_vec,nl_vec = self.encoder(pl_inputs,nl_inputs)
+    #将两个向量按位相减
     diff = nl_vec - code_vec
+    #将两个向量按位相乘
     mul = nl_vec * code_vec
     inputs = torch.cat((code_vec,nl_vec,diff,mul),1)
     out1 = self.fc1(inputs)

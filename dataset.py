@@ -40,7 +40,7 @@ class CodeSearchDataset(Dataset):
                 for line in f.readlines():
                     num += 1
                     js = json.loads(line)
-                    example = convert_examples_to_features(js,num,self.config,num)
+                    example = convert_examples_to_features(js,num,self.config,classifier=False)
                     examples.append(example)
             return examples
         else:

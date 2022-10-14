@@ -7,9 +7,9 @@ import json
 from utils import cos_similarity,get_priliminary
 
 
-def eval_encoder(dataloader,encoder,config,test = False):
-  if os.path.exists(config.model_save_path+"/encoder.pt"):
-    encoder.load_state_dict(torch.load(config.model_save_path+"/encoder.pt"))
+def eval_encoder(dataloader,encoder,config,test = False,ret = False):
+  if os.path.exists(config.saved_path+"/encoder.pt"):
+    encoder.load_state_dict(torch.load(config.saved_path+"/encoder.pt"))
 
   loss_func = torch.nn.CrossEntropyLoss()
   total_loss = 0
@@ -33,7 +33,7 @@ def eval_encoder(dataloader,encoder,config,test = False):
     with torch.no_grad():
       code_vec,nl_vec = encoder(pl_ids,nl_ids)
       # scores = cos_similarity(nl_vec,code_vec)
-      scores=(nl_vecs[:,None,:]*code_vecs[None,:,:]).sum(-1)
+      scores=(nl_vec[:,None,:]*code_vec[None,:,:]).sum(-1)
       labels = torch.arange(code_vec.shape[0])
       if config.use_cuda:
         labels = labels.cuda()
@@ -64,6 +64,8 @@ def eval_encoder(dataloader,encoder,config,test = False):
   print("Current Loss:{},Current MRR :{}".format(total_loss/num_step ,mrr))
   if test:
     return scores
+  if ret:
+    return (total_loss/num_step,mrr)
 
 #用测试集对encoder进行测试，并且对NL查询按相似度排序返回结果
 def test_encoder(dataloader,encoder,dataset,config,log = False,ret = False):

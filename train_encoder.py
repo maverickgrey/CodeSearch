@@ -12,6 +12,7 @@ from model import CasEncoder
 
 
 def train_encoder(train_dataloader,eval_dataloader,encoder,config):
+  max_mrr = 0
   if not os.path.exists(config.saved_path):
     os.makedirs(config.saved_path)
 
@@ -19,7 +20,7 @@ def train_encoder(train_dataloader,eval_dataloader,encoder,config):
     encoder = encoder.cuda()
 
   encoder.zero_grad()
-  optimizer = torch.optim.AdamW(encoder.parameters(),lr=1e-4)
+  optimizer = torch.optim.AdamW(encoder.parameters(),lr=1e-5)
   num_training_steps = len(train_dataloader)*config.epoches
   scheduler = get_linear_schedule_with_warmup(optimizer,num_warmup_steps=num_training_steps/10,num_training_steps=num_training_steps)
   loss_func = torch.nn.CrossEntropyLoss()
@@ -73,11 +74,18 @@ def train_encoder(train_dataloader,eval_dataloader,encoder,config):
  
       if step%100 == 0:
         print("epoch:{},step:{},avg_loss:{},current_loss:{}".format(epoch+1,step,total_loss/tr_num,current_loss))
-      if step%5000 == 0:
-        eval_encoder(eval_dataloader,encoder=encoder)
-    torch.save(encoder.state_dict(),config.saved_path+"/encoder.pt")
-    torch.save(optimizer.state_dict(),config.saved_path+"/e_optimizer.pt")
-    torch.save(scheduler.state_dict(),config.saved_path+"/e_scheduler.pt")
+        with open(config.saved_path+"/encoder_log2.txt",'a') as lg:
+          lg.write("epoch:{},step:{},avg_loss:{},current_loss:{}".format(epoch+1,step,total_loss/tr_num,current_loss)+"\n")
+      if step%15000 == 0:
+        avg_loss,mrr = eval_encoder(eval_dataloader,encoder=encoder,config=config,test=False,ret=True)
+        if mrr>max_mrr:
+          max_mrr = mrr
+          torch.save(encoder.state_dict(),config.saved_path+"/encoder.pt")
+          torch.save(optimizer.state_dict(),config.saved_path+"/e_optimizer.pt")
+          torch.save(scheduler.state_dict(),config.saved_path+"/e_scheduler.pt")
+        with open(config.saved_path+"/encoder_log2.txt",'a') as lg:
+          lg.write("evaluation---avg_loss:{},mrr:{}".format(avg_loss,mrr)+"\n")
+
 
 
 if __name__ == '__main__':

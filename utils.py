@@ -38,7 +38,7 @@ def convert_examples_to_features(js,id,config,classifier=False):
     padding_length = config.max_seq_length - len(pl_ids)
     pl_ids += [config.tokenizer.pad_token_id]*padding_length
 
-    if classifier:
+    if classifier==True:
       label = js['label']
       return ClassifierFeatures(nl_tokens,nl_ids=nl_ids,pl_tokens=pl_tokens,pl_ids=pl_ids,label=label)
     else:
