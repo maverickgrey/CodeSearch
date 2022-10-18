@@ -232,8 +232,8 @@ def filter_encoder_data():
 
 # 把所有的训练数据弄到一个文件里
 def converge():
-    prefix = "./CodeSearchNet/filted_data/java_train_f_"
-    out_path = "./CodeSearchNet/filted_data/java_train.jsonl"
+    prefix = "./CodeSearchNet/classifier/ctrain_"
+    out_path = "./CodeSearchNet/classifier/java_train_c.jsonl"
     f = open(out_path,'a')
     for train_no in range(16):
         postfix = str(train_no)+".jsonl"
@@ -246,16 +246,13 @@ def converge():
                 read['docstring_tokens'] = js['docstring_tokens']
                 read['code'] = js['code']
                 read['code_tokens'] = js['code_tokens']
-               # read['label'] = js['label']
+                read['label'] = js['label']
                 f.write(json.dumps(read)+'\n')
     f.close()
     
-# process(shuffle=True)
-# filter_encoder_data()
-# converge()
 
 if __name__ == "__main__":
-    # train_path = "./CodeSearchNet/filted_data/java_train_all.jsonl"
-    # out_path = "./CodeSearchNet/filted_data/java_train.jsonl"
+    # train_path = "./CodeSearchNet/classifier/java_train_cl.jsonl"
+    # out_path = "./CodeSearchNet/classifier/java_train_c.jsonl"
     # process_a_file(train_path,out_path,True,True)
     converge()

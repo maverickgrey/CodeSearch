@@ -6,9 +6,9 @@ import torch
 import torch.nn as nn
 import os
 
-def eval_classifier(dataloader,classifier,config,ret=False):
-    if os.path.exists(config.saved_path+"/classifier3.pt"):
-        classifier.load_state_dict(torch.load(config.saved_path+"/classifier3.pt"))
+def eval_classifier(dataloader,classifier,config,train=False,ret=False):
+    if os.path.exists(config.saved_path+"/classifier.pt") and train==False:
+        classifier.load_state_dict(torch.load(config.saved_path+"/classifier.pt"))
     classifier.zero_grad()
     total_loss = 0
     total_step = 0
@@ -18,14 +18,12 @@ def eval_classifier(dataloader,classifier,config,ret=False):
     classifier.eval()
     loss_func = nn.CrossEntropyLoss()
     for step,example in enumerate(dataloader):
-        pl_ids = example[0]
-        nl_ids = example[1]
-        label = example[2]
+        inputs = example[0]
+        label = example[1]
         if config.use_cuda:
-            pl_ids = pl_ids.cuda()
-            nl_ids = nl_ids.cuda()
+            inputs = inputs.cuda()
             label = label.cuda()
-        logits = classifier(pl_ids,nl_ids)
+        logits = classifier(inputs)
         pred = torch.argmax(logits,dim=1)
         loss = loss_func(logits,label)
         total_loss += loss.item()

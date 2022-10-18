@@ -77,7 +77,9 @@ def train_encoder(train_dataloader,eval_dataloader,encoder,config):
         with open(config.saved_path+"/encoder_log2.txt",'a') as lg:
           lg.write("epoch:{},step:{},avg_loss:{},current_loss:{}".format(epoch+1,step,total_loss/tr_num,current_loss)+"\n")
       if step%15000 == 0:
-        avg_loss,mrr = eval_encoder(eval_dataloader,encoder=encoder,config=config,test=False,ret=True)
+        avg_loss,mrr = eval_encoder(eval_dataloader,encoder=encoder,config=config,test=False,ret=True,during_train=True)
+        with open(config.saved_path+"/encoder_log2.txt",'a') as lg:
+          lg.write("max_mrr:{},current_mrr:{}".format(max_mrr,mrr))
         if mrr>max_mrr:
           max_mrr = mrr
           torch.save(encoder.state_dict(),config.saved_path+"/encoder.pt")

@@ -3,7 +3,7 @@ import torch
 import math
 import numpy as np
 
-
+# 为了方便处理encoder的数据所使用的数据结构
 class InputFeatures(object):
   def __init__(self,nl_tokens,nl_ids,pl_tokens,pl_ids,id):
     self.nl_tokens = nl_tokens
@@ -12,16 +12,42 @@ class InputFeatures(object):
     self.pl_ids = pl_ids
     self.id = id
 
+# 为了方便处理classifier的数据使用的数据结构
 class ClassifierFeatures(object):
-  def __init__(self,nl_tokens,nl_ids,pl_tokens,pl_ids,label):
-    self.nl_tokens = nl_tokens
-    self.nl_ids = nl_ids
-    self.pl_tokens = pl_tokens
-    self.pl_ids = pl_ids 
+  def __init__(self,tokens,token_ids,label):
+    self.token_ids=token_ids
+    self.tokens = tokens
     self.label = label
+
+# 运行整个流程，即进行代码搜索时使用的数据结构
+class CodeStruct(object):
+  def __init__(self,code_vec,code_tokens,code):
+    self.code_tokens = code_tokens
+    self.code_vec = code_vec
+    self.code = code
+
+# 用来暂时模拟代码库的数据结构，里面存放的是codestruct
+class CodeBase(object):
+  def __init__(self,code_base):
+    self.base_size = len(code_base)
+    self.code_base = code_base
+    self.code_vecs = self.get_code_vecs(code_base)
+  
+  def get_code_vecs(self):
+    code_vecs = []
+    for code in self.code_base:
+      code_vecs.append(code.code_vec)
+    return code_vecs
+  
+  def get_code(self,index):
+    return self.code_base[index].code
+  
+  def get_code_vec(self,index):
+    return self.code_base[index].code_vec
 
 # 把数据转换成模型能够处理的形式
 def convert_examples_to_features(js,id,config,classifier=False):
+  if classifier==False:
     nl = ' '.join(js['docstring_tokens'])
     nl_tokens = config.tokenizer.tokenize(nl)
     nl_tokens = nl_tokens[:config.max_seq_length-2]
@@ -37,12 +63,21 @@ def convert_examples_to_features(js,id,config,classifier=False):
     pl_ids = config.tokenizer.convert_tokens_to_ids(pl_tokens)
     padding_length = config.max_seq_length - len(pl_ids)
     pl_ids += [config.tokenizer.pad_token_id]*padding_length
-
-    if classifier==True:
-      label = js['label']
-      return ClassifierFeatures(nl_tokens,nl_ids=nl_ids,pl_tokens=pl_tokens,pl_ids=pl_ids,label=label)
-    else:
-      return InputFeatures(nl_tokens,nl_ids,pl_tokens,pl_ids,id)
+    return InputFeatures(nl_tokens,nl_ids,pl_tokens,pl_ids,id)
+  else:
+    nl = ' '.join(js['docstring_tokens'])
+    nl_tokens = config.tokenizer.tokenize(nl)
+    pl = ' '.join(js['code_tokens'])
+    pl_tokens = config.tokenizer.tokenize(pl)
+    input_tokens = [config.tokenizer.cls_token]+nl_tokens+[config.tokenizer.sep_token]
+    input_tokens += pl_tokens
+    input_tokens = input_tokens[:config.max_seq_length-1]
+    input_tokens +=[config.tokenizer.sep_token]
+    padding_length = config.max_seq_length - len(input_tokens)
+    input_tokens += [config.tokenizer.pad_token]*padding_length
+    input_ids = config.tokenizer.convert_tokens_to_ids(input_tokens)
+    label = js['label']
+    return ClassifierFeatures(input_tokens,input_ids,label)
     
 def print_features(features):
   for f in features:
@@ -67,41 +102,21 @@ def cos_similarity(mat_a,mat_b):
 
 # 利用编码器输出的向量表示，经相似度计算后获得的一个初步的结果——result返回二维数组，其中每一行为nl对pl的相似度的降序排序
 # 其中K表示的是初步选取相似度最高的K个结果
-def get_priliminary(scores,dataset,K):
+def get_priliminary(score,codebase,K):
   # np.argsort的功能是给一个数组排序，返回排序后的数字对应原来数字所在位置的下标
   # 默认升序排序，这里添加负号即可实现降序
-  sort_ids = np.argsort(-scores,axis=-1,kind='quicksort',order=None)
-  examples = []
+  sort_id = np.argsort(-score,axis=-1,kind='quicksort',order=None)
   result = []
-  for example in dataset.data:
-    examples.append(example)
-  for sort_id in sort_ids:
-    res = []
-    for index in sort_id:
-      res.append(examples[index])
-    result.append(res[:K])
-  return result,examples
-
-def read_priliminary(results):
-  for result in results:
-    for r in result:
-      print(r.id)
+  for index in sort_id:
+    if len(result<K):
+      result.append(codebase.code_base[index])
+  return result
 
 
 # 在用快速编码器得到初步的结果之后，用慢速分类器对初步的结果进行re-rank
-def rerank(results,examples,classifier,config):
+def rerank(query,pre_results,classifier,config):
   final = []
-  for i in range(len(results)):
-    example = examples[i]
-    scores = []
-    for j in range(len(results[0])):
-      if example.id != results[i][j].id:
-        pl_ids = torch.tensor([results[i][j].pl_ids])
-        nl_ids = torch.tensor([example.nl_ids])
-        if config.use_cuda:
-          pl_ids = pl_ids.cuda()
-          nl_ids = nl_ids.cuda()
-        score = classifier(pl_ids,nl_ids).tolist()[0][0]
-        scores.append(score)
-    final.append(scores)
+  for pr in pre_results:
+    code_tokens = pr.code_tokens
+    #TODO
   return final

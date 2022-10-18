@@ -6,12 +6,14 @@ import torch.nn as nn
 # CasCode的快速部分——编码器，这里使用了CodeBert预训练模型.
 # 共享参数，为自然语言查询和代码进行编码
 class CasEncoder(nn.Module):
-  def __init__(self):
+  def __init__(self,encode='both'):
     super(CasEncoder,self).__init__()
+    self.encode = encode
     self.encoder = RobertaModel.from_pretrained("microsoft/codebert-base")
   
-  def forward(self,pl_inputs,nl_inputs,encode='both'):
+  def forward(self,pl_inputs,nl_inputs):
     # 对NL-PL都进行编码
+    encode = self.encode
     if encode=="both":
     # pl_inputs的输入格式为tensor(batch_size,seq_len)
     # code_len在这里的含义即为batch_size
@@ -35,7 +37,7 @@ class CasEncoder(nn.Module):
       code_vec = self.encoder(inputs,attention_mask=inputs.ne(1)).pooler_output
       return code_vec
     else:
-      print("编码器的模式只能为both、nl、code！")
+      print("编码器的模式只能为both、nl、code!")
 
 
 # CasCode的慢速部分——分类器：给定一对NL-PL对，判断PL符合NL的概率是多少
@@ -44,13 +46,12 @@ class CasEncoder(nn.Module):
 class SimpleCasClassifier(nn.Module):
   def __init__(self):
     super(SimpleCasClassifier,self).__init__()
-    self.encoder = CasEncoder()
-    self.fc = nn.Linear(1536,2)
+    self.encoder = RobertaModel.from_pretrained("microsoft/codebert-base")
+    self.fc = nn.Linear(768,2)
   
-  def forward(self,pl_inputs,nl_inputs):
-    code_vec,nl_vec = self.encoder(pl_inputs,nl_inputs)
-    inputs = torch.cat((code_vec,nl_vec),1)
-    outputs = self.fc(inputs)
+  def forward(self,inputs):
+    vec = self.encoder(inputs,attention_mask = inputs.ne(1)).pooler_output
+    outputs = self.fc(vec)
     #outputs = torch.softmax(outputs,dim=-1)
     return outputs
 

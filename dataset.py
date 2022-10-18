@@ -45,7 +45,7 @@ class CodeSearchDataset(Dataset):
             return examples
         else:
             num = 0
-            train_path = self.config.data_path +"/filted_data"+"/java_train.jsonl"
+            train_path = self.config.data_path +"/filtered_data"+"/java_train.jsonl"
             with open(train_path,'r') as f:
                 for line in f.readlines():
                     num+=1
@@ -67,14 +67,14 @@ class ClassifierDataset(Dataset):
     def load_examples(self,mode):
         examples = []
         if mode == 'eval':
-            # num = 0
+            num = 0
             eval_path = self.config.data_path+"/classifier/cvalid_0.jsonl"
             with open(eval_path,'r') as f:
                 for line in f.readlines():
                     js = json.loads(line)
                     example = convert_examples_to_features(js,-1,self.config,True)
                     examples.append(example)
-                    # num += 1
+                    num += 1
                     # if num > 100:
                     #     break
             return examples
@@ -91,10 +91,9 @@ class ClassifierDataset(Dataset):
             return examples
 
     def __getitem__(self, index):
-        pl_ids = self.data[index].pl_ids
-        nl_ids = self.data[index].nl_ids
+        inputs_ids = self.data[index].token_ids
         label = self.data[index].label
-        return (torch.tensor(pl_ids),torch.tensor(nl_ids),torch.tensor(label))
+        return (torch.tensor(inputs_ids),torch.tensor(label))
     
     def __len__(self):
         return len(self.data)
@@ -109,7 +108,17 @@ class ClassifierDataset2(Dataset):
     
     def load_examples(self,mode):
         if mode == 'eval':
-            pass
+            num = 0
+            eval_path = self.config.data_path+"/classifier/cvalid_0.jsonl"
+            with open(eval_path,'r') as f:
+                for line in f.readlines():
+                    js = json.loads(line)
+                    example = convert_examples_to_features(js,-1,self.config,True)
+                    examples.append(example)
+                    num += 1
+                    # if num > 100:
+                    #     break
+            return examples
         elif mode == 'test':
             pass
         else:
@@ -123,10 +132,9 @@ class ClassifierDataset2(Dataset):
             return examples
 
     def __getitem__(self, index):
-        pl_ids = self.data[index].pl_ids
-        nl_ids = self.data[index].nl_ids
+        input_ids = self.data[index].token_ids
         label = self.data[index].label
-        return (torch.tensor(pl_ids),torch.tensor(nl_ids),torch.tensor(label))
+        return (torch.tensor(input_ids),torch.tensor(label))
     
     def __len__(self):
         return len(self.data)
