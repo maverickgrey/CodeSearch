@@ -60,7 +60,7 @@ class SimpleCasClassifier(nn.Module):
 class CasClassifier(nn.Module):
   def __init__(self):
     super(CasClassifier,self).__init__()
-    self.encoder = CasEncoder()
+    self.encoder = CasEncoder('both')
     # 通过fc1后，再经由tanh函数获得NL-PL的关系向量
     self.fc1 = nn.Linear(4*768,768)
     # 关系向量通过fc2后，再经由sigmoid函数得到NL-PL对的相似分数

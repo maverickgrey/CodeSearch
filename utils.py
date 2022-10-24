@@ -12,19 +12,29 @@ class InputFeatures(object):
     self.pl_ids = pl_ids
     self.id = id
 
-# 为了方便处理classifier的数据使用的数据结构
-class ClassifierFeatures(object):
+# 为了方便处理simpleclassifier的数据使用的数据结构
+class SimpleClassifierFeatures(object):
   def __init__(self,tokens,token_ids,label):
     self.token_ids=token_ids
     self.tokens = tokens
     self.label = label
 
+#
+class CasClassifierFeatures:
+  def __init__(self,pl_tokens,pl_ids,nl_tokens,nl_ids,label):
+    self.pl_tokens = pl_tokens
+    self.pl_ids = pl_ids
+    self.nl_tokens = nl_tokens
+    self.nl_ids = nl_ids
+    self.label = label
+
 # 运行整个流程，即进行代码搜索时使用的数据结构
 class CodeStruct(object):
-  def __init__(self,code_vec,code_tokens,code):
+  def __init__(self,code_vec,code_tokens,code,no):
     self.code_tokens = code_tokens
     self.code_vec = code_vec
     self.code = code
+    self.no = no
 
 # 用来暂时模拟代码库的数据结构，里面存放的是codestruct
 class CodeBase(object):
@@ -51,8 +61,8 @@ class CodeBase(object):
 
 
 # 把数据转换成模型能够处理的形式
-def convert_examples_to_features(js,id,config,classifier=False):
-  if classifier==False:
+def convert_examples_to_features(js,no,config,classifier=0):
+  if classifier==0:
     nl = ' '.join(js['docstring_tokens'])
     nl_tokens = config.tokenizer.tokenize(nl)
     nl_tokens = nl_tokens[:config.max_seq_length-2]
@@ -68,8 +78,8 @@ def convert_examples_to_features(js,id,config,classifier=False):
     pl_ids = config.tokenizer.convert_tokens_to_ids(pl_tokens)
     padding_length = config.max_seq_length - len(pl_ids)
     pl_ids += [config.tokenizer.pad_token_id]*padding_length
-    return InputFeatures(nl_tokens,nl_ids,pl_tokens,pl_ids,id)
-  else:
+    return InputFeatures(nl_tokens,nl_ids,pl_tokens,pl_ids,no)
+  elif classifier == 1:
     nl = ' '.join(js['docstring_tokens'])
     nl_tokens = config.tokenizer.tokenize(nl)
     pl = ' '.join(js['code_tokens'])
@@ -82,7 +92,25 @@ def convert_examples_to_features(js,id,config,classifier=False):
     input_tokens += [config.tokenizer.pad_token]*padding_length
     input_ids = config.tokenizer.convert_tokens_to_ids(input_tokens)
     label = js['label']
-    return ClassifierFeatures(input_tokens,input_ids,label)
+    return SimpleClassifierFeatures(input_tokens,input_ids,label)
+  else:
+    nl = ' '.join(js['docstring_tokens'])
+    nl_tokens = config.tokenizer.tokenize(nl)
+    nl_tokens = nl_tokens[:config.max_seq_length-2]
+    nl_tokens = [config.tokenizer.cls_token]+nl_tokens+[config.tokenizer.sep_token]
+    nl_ids = config.tokenizer.convert_tokens_to_ids(nl_tokens)
+    padding_length = config.max_seq_length - len(nl_ids)
+    nl_ids += [config.tokenizer.pad_token_id]*padding_length
+
+    pl = ' '.join(js['code_tokens'])
+    pl_tokens = config.tokenizer.tokenize(pl)
+    pl_tokens = pl_tokens[:config.max_seq_length-2]
+    pl_tokens = [config.tokenizer.cls_token]+pl_tokens+[config.tokenizer.sep_token]
+    pl_ids = config.tokenizer.convert_tokens_to_ids(pl_tokens)
+    padding_length = config.max_seq_length - len(pl_ids)
+    pl_ids += [config.tokenizer.pad_token_id]*padding_length
+    label = js['label']
+    return CasClassifierFeatures(pl_tokens,pl_ids,nl_tokens,nl_ids,label)
     
 def print_features(features):
   for f in features:
@@ -103,13 +131,13 @@ def cos_similarity(mat_a,mat_b):
   for row in range(len(a_mode)):
     for col in range(len(b_mode)):
       scores[row][col] /= a_mode[row]*b_mode[col]
-  print(a_mode)
-  print(b_mode)
+  # print(a_mode)
+  # print(b_mode)
   return scores
 
 # 利用编码器输出的向量表示，经相似度计算后获得的一个初步的结果——result返回二维数组，其中每一行为nl对pl的相似度的降序排序
 # 其中K表示的是初步选取相似度最高的K个结果
-def get_priliminary(score,codebase,K):
+def get_priliminary(score,codebase,config):
   # np.argsort的功能是给一个数组排序，返回排序后的数字对应原来数字所在位置的下标
   # 默认升序排序，这里添加负号即可实现降序
   sort_ids = np.argsort(-score,axis=-1,kind='quicksort',order=None)
@@ -117,7 +145,7 @@ def get_priliminary(score,codebase,K):
   for sort_id in sort_ids:
     result = []
     for index in sort_id:
-      if len(result)<K:
+      if len(result)<config.filter_K:
         result.append(codebase.code_base[index])
     results.append(result)
   return results
@@ -127,6 +155,8 @@ def get_priliminary(score,codebase,K):
 def rerank(query_tokens,pre_results,classifier,config):
   final = []
   re_scores = np.array([])
+  #pre_results会拿到经过encoder的一个初步结果，pre_results是一个列表，每个元素是一个用来表示每条代码段的数据结构（CodeStruct）
+  #接下来是用查询的query_tokens和每个pre_result拼在一起送入分类器，判断它们相匹配的概率，并把概率存到re_scores中
   for pr in pre_results:
     code_tokens = pr.code_tokens
     input_tokens = [config.tokenizer.cls_token]+query_tokens+[config.tokenizer.sep_token]
@@ -142,9 +172,10 @@ def rerank(query_tokens,pre_results,classifier,config):
     logit = classifier(input_ids)
     probs = torch.reshape(torch.softmax(logit,dim=-1).cpu().detach(),(2,))
     re_scores = np.append(re_scores,probs[1].item())
-  print(re_scores)
+  
+  #print("预处理结果中与查询匹配的概率：",re_scores)
   script = np.argsort(-re_scores,-1,'quicksort',None)
-  print(script)
+  #print("预处理结果中按概率降序的下标:",script)
   for i in script:
     if len(final)<config.final_K:
       final.append(pre_results[i])
