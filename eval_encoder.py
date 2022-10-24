@@ -126,6 +126,6 @@ def test_encoder(dataloader,encoder,dataset,config,log = False,ret = False):
 if __name__ == '__main__':
   config = Config()
   encoder = CasEncoder()
-  dataset = CodeSearchDataset(config,'eval')
+  dataset = CodeSearchDataset(config,'test')
   dataloader = DataLoader(dataset,config.eval_batch_size)
   eval_encoder(dataloader,encoder,config,test=False,ret=False,during_train=False)

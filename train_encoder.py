@@ -21,7 +21,7 @@ def train_encoder(train_dataloader,eval_dataloader,encoder,config):
 
   encoder.zero_grad()
   optimizer = torch.optim.AdamW(encoder.parameters(),lr=1e-5)
-  num_training_steps = len(train_dataloader)*config.epoches
+  num_training_steps = len(train_dataloader)*config.encoder_epoches
   scheduler = get_linear_schedule_with_warmup(optimizer,num_warmup_steps=num_training_steps/10,num_training_steps=num_training_steps)
   loss_func = torch.nn.CrossEntropyLoss()
 
@@ -32,7 +32,7 @@ def train_encoder(train_dataloader,eval_dataloader,encoder,config):
   if os.path.exists(config.saved_path+"/e_cheduler.pt"):
     scheduler.load_state_dict(torch.load(config.saved_path+"/e_scheduler.pt"))
     
-  for epoch in range(config.epoches):
+  for epoch in range(config.encoder_epoches):
     total_loss = 0
     tr_num = 0
     encoder.train()

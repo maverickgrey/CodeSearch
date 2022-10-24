@@ -1,9 +1,6 @@
-import code
-from dataset import CodeSearchDataset
-from torch.utils.data import DataLoader
 from config_class import Config
 from model import CasEncoder,CasClassifier,SimpleCasClassifier
-from utils import cos_similarity,get_priliminary,rerank,CodeStruct,CodeBase
+from utils import cos_similarity,get_priliminary,get_info,rerank,CodeStruct,CodeBase
 from eval_encoder import eval_encoder
 import numpy as np
 import torch
@@ -12,36 +9,46 @@ import json
 
 def run():
     config = Config()
-    dataset = CodeSearchDataset(config.test_path)
-    dataloader = DataLoader(dataset,batch_size=config.eval_batch_size)  
     encoder_nl = CasEncoder(encode='nl')
-    encoder_pl = CasEncoder(encode='pl')
+    encoder_pl = CasEncoder(encode='code')
     classifier = SimpleCasClassifier()
 
     if config.use_cuda == True:
         encoder_nl = encoder_nl.cuda()
         encoder_pl = encoder_pl.cuda()
         classifier = classifier.cuda()
-
-    nl_vecs = []
-    code_base = []
-
     # 先填充代码库
+    print("正在加载代码库")
     codebase = load_codebase(config.test_path,config,encoder_pl)
 
-    # 再逐个拿出query进行测试
-    with open(config.test_path,'r') as f:
-        for line in f.readlines():
-            js = json.loads(line)
-            query_tokens = js['docstring_tokens']
-            query = ' '.join(query_tokens)
-            query_vec = query_to_vec(query,config,encoder_nl)
-            score = cos_similarity(query_vec,codebase.code_vecs).numpy()
-            # 得到相似度分数后先初步获取K个candidates，之后让classifier对这K个candidates重排序
-            prilim = get_priliminary(score,codebase,config.filter_K)
-            result = rerank(prilim,codebase,classifier,config)
-
-    print(result)
+    if config.run_way == 'test':
+        # 再逐个拿出query进行测试
+        with open(config.test_path,'r') as f:
+            for line in f.readlines():
+                js = json.loads(line)
+                query_tokens = js['docstring_tokens']
+                query = ' '.join(query_tokens)
+                query_vec = query_to_vec(query,config,encoder_nl)
+                score = cos_similarity(query_vec,codebase.code_vecs).numpy()
+                # 得到相似度分数后先初步获取K个candidates，之后让classifier对这K个candidates重排序
+                prilim = get_priliminary(score,codebase,config.filter_K)
+                result = rerank(query_tokens,prilim,classifier,config)
+        get_info(result)
+    
+    elif config.run_way == 'truth':
+        while(True):
+            query = input("你想查询什么？(退出输入c)")
+            if query == 'c':
+                break
+            query_tokens = query.split(' ')
+            query_vec = query_to_vec(query,config,encoder_nl).cpu()
+            scores = cos_similarity(query_vec,codebase.code_vecs)
+            scores = scores.detach().numpy()
+            print(scores)
+            pre = get_priliminary(scores,codebase,10)
+            for _pre in pre:
+                final = rerank(query_tokens,_pre,classifier,config)
+            get_info(final)
 
 # 将代码转换成向量并存入数据库中
 def load_codebase(data_path,config,encoder):
@@ -49,44 +56,56 @@ def load_codebase(data_path,config,encoder):
     with open(data_path,'r') as d:
         for line in d.readlines():
             js = json.loads(line)
-            pl = js['code_tokens'].join(' ')
+            pl = ' '.join(js['code_tokens'])
+            origin_pl = js['code']
             pl_tokens = config.tokenizer.tokenize(pl)
+            origin_pl_tokens = pl_tokens
             pl_tokens = pl_tokens[:config.max_seq_length-2]
             pl_tokens = [config.tokenizer.cls_token] + pl_tokens +[config.tokenizer.sep_token]
             padding_length = config.max_seq_length-len(pl_tokens)
             pl_tokens += padding_length*[config.tokenizer.pad_token]
-            pl_ids = torch.tensor(config.tokenizer.convert_tokens_to_ids(pl_tokens))
+            pl_ids = torch.tensor([config.tokenizer.convert_tokens_to_ids(pl_tokens)])
             if config.use_cuda:
                 pl_ids = pl_ids.cuda()
-            pl_vec = encoder(pl_ids,None)
-            code_struct = CodeStruct(pl_vec,pl_tokens,pl)
+            pl_vec = torch.reshape(encoder(pl_ids,None),(768,)).cpu().tolist()
+            code_struct = CodeStruct(pl_vec,origin_pl_tokens,origin_pl)
             code_base.append(code_struct)
     return CodeBase(code_base)
 
-# 将自然语言查询转换为向量
+# 将一条自然语言查询转换为向量，这个向量的维数为(1,768)，注意是二维的
 def query_to_vec(query,config,encoder):
     query_tokens = config.tokenizer.tokenize(query)
     query_tokens = query_tokens[:config.max_seq_length-2]
     query_tokens = [config.tokenizer.cls_token]+query_tokens+[config.tokenizer.sep_token]
     padding_length = config.max_seq_length - len(query_tokens)
     query_tokens += padding_length*[config.tokenizer.pad_token]
-    query_ids = torch.tensor(config.tokenizer.convert_tokens_to_ids(query_ids))
+    query_ids = torch.tensor([config.tokenizer.convert_tokens_to_ids(query_tokens)])
     if config.use_cuda:
         query_ids = query_ids.cuda()
     query_vec = encoder(None,query_ids)
-    return [query_vec]
+    return query_vec
 
 
 def test2_func():
     config = Config()
-    nl_text = "<cls> This is a test <sep>"
-    pl_text = "def func ( x , y ) : return x + y <sep>"
-    inputs = nl_text+pl_text
-    inputs_tokens = config.tokenizer.tokenize(inputs)
-    print(inputs_tokens)
-    print(config.tokenizer.cls_token)
-    print(config.tokenizer.sep_token_id)
-    print(config.tokenizer.eos_token_id)
-
+    classifier = SimpleCasClassifier()
+    encoder_pl = CasEncoder('code')
+    encoder_nl = CasEncoder('nl')
+    if config.use_cuda:
+        encoder_pl=encoder_pl.cuda()
+        encoder_nl=encoder_nl.cuda()
+        classifier = classifier.cuda()
+    code_base = load_codebase(config.test_path,config,encoder_pl)
+    query = "Concatenates a variable number of ObservableSource sources"
+    query_tokens = query.split(' ')
+    query_vec = query_to_vec(query,config,encoder_nl).cpu()
+    scores = cos_similarity(query_vec,code_base.code_vecs)
+    scores = scores.detach().numpy()
+    print(scores)
+    pre = get_priliminary(scores,code_base,10)
+    for _pre in pre:
+        final = rerank(query_tokens,_pre,classifier,config)
+    get_info(final)
+    
 if __name__ == "__main__":
-    test2_func()
+    run()

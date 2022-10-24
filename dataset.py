@@ -28,10 +28,10 @@ class CodeSearchDataset(Dataset):
                 for line in f.readlines():
                     num += 1
                     js = json.loads(line)
-                    example = convert_examples_to_features(js,num,self.config,num)
+                    example = convert_examples_to_features(js,num,self.config,classifier=False)
                     examples.append(example)
-                    if num>10:
-                        break
+                    # if num>10:
+                    #     break
             return examples
         elif mode == 'eval':
             eval_path = self.config.data_path + "/origin_data"+"/java_valid_0.jsonl"

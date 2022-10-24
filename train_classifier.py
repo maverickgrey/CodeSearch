@@ -9,13 +9,14 @@ from model import SimpleCasClassifier
 from eval_classifier import eval_classifier
 
 def train_classifier(dataloader,eval_dataloader,classifier,config):
+    max_acc = 0
     if not os.path.exists(config.saved_path):
         os.makedirs(config.saved_path)
 
     classifier.zero_grad()
     loss_func = nn.CrossEntropyLoss()
     optimizer = torch.optim.AdamW(classifier.parameters(),lr=3e-6)
-    num_training = len(dataloader)*config.epoches
+    num_training = len(dataloader)*config.classifier_epoches
     scheduler = get_linear_schedule_with_warmup(optimizer,num_warmup_steps=num_training/10,num_training_steps=num_training)
 
 
@@ -30,7 +31,7 @@ def train_classifier(dataloader,eval_dataloader,classifier,config):
 
     total_loss = 0
     total_step = 0
-    for epoch in range(config.epoches):
+    for epoch in range(config.classifier_epoches):
         classifier.train()
         for step,example in enumerate(dataloader):
             inputs = example[0]
@@ -58,12 +59,13 @@ def train_classifier(dataloader,eval_dataloader,classifier,config):
                 print(log)
                 log_file.write(log+"\n")
                 avg_loss,acc = eval_classifier(eval_dataloader,classifier,config,train=True,ret=True)
-                log_file.write("evaluation: avg_{},acc:{}".format(avg_loss,acc))
+                log_file.write("evaluation: avg_{},acc:{},max_acc:{}".format(avg_loss,acc,max_acc))
                 log_file.close()
-
-        torch.save(classifier.state_dict(),config.saved_path+"/classifier.pt")
-        torch.save(optimizer.state_dict(),config.saved_path+"/c_optimizer.pt")
-        torch.save(scheduler.state_dict(),config.saved_path+"/c_scheduler.pt")
+                if acc>max_acc:
+                    max_acc = acc
+                    torch.save(classifier.state_dict(),config.saved_path+"/classifier.pt")
+                    torch.save(optimizer.state_dict(),config.saved_path+"/c_optimizer.pt")
+                    torch.save(scheduler.state_dict(),config.saved_path+"/c_scheduler.pt")
 
 def train_classifier2(classifier,config):
     if not os.path.exists(config.saved_path):
@@ -82,7 +84,7 @@ def train_classifier2(classifier,config):
 
     total_loss = 0
     total_step = 0
-    for epoch in range(config.epoches):
+    for epoch in range(config.classifier_epoches):
         classifier.train()
         for train_no in range(16):
             print("正在加载数据集{}".format(train_no))

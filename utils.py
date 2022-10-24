@@ -31,19 +31,24 @@ class CodeBase(object):
   def __init__(self,code_base):
     self.base_size = len(code_base)
     self.code_base = code_base
-    self.code_vecs = self.get_code_vecs(code_base)
+    self.code_vecs = self.get_code_vecs()
   
   def get_code_vecs(self):
     code_vecs = []
     for code in self.code_base:
       code_vecs.append(code.code_vec)
-    return code_vecs
+    return torch.tensor(code_vecs)
   
   def get_code(self,index):
     return self.code_base[index].code
   
   def get_code_vec(self,index):
     return self.code_base[index].code_vec
+  
+  def get_info(self):
+    for c in self.code_base:
+      print("code:",c.code)
+
 
 # 把数据转换成模型能够处理的形式
 def convert_examples_to_features(js,id,config,classifier=False):
@@ -95,9 +100,11 @@ def cos_similarity(mat_a,mat_b):
     a_mode.append(math.sqrt(torch.matmul(vec_a,vec_a.T)))
   for vec_b in mat_b:
     b_mode.append(math.sqrt(torch.matmul(vec_b,vec_b.T)))
-  for row in range(len(scores)):
-    for col in range(len(scores)):
+  for row in range(len(a_mode)):
+    for col in range(len(b_mode)):
       scores[row][col] /= a_mode[row]*b_mode[col]
+  print(a_mode)
+  print(b_mode)
   return scores
 
 # 利用编码器输出的向量表示，经相似度计算后获得的一个初步的结果——result返回二维数组，其中每一行为nl对pl的相似度的降序排序
@@ -105,18 +112,45 @@ def cos_similarity(mat_a,mat_b):
 def get_priliminary(score,codebase,K):
   # np.argsort的功能是给一个数组排序，返回排序后的数字对应原来数字所在位置的下标
   # 默认升序排序，这里添加负号即可实现降序
-  sort_id = np.argsort(-score,axis=-1,kind='quicksort',order=None)
-  result = []
-  for index in sort_id:
-    if len(result<K):
-      result.append(codebase.code_base[index])
-  return result
+  sort_ids = np.argsort(-score,axis=-1,kind='quicksort',order=None)
+  results = []
+  for sort_id in sort_ids:
+    result = []
+    for index in sort_id:
+      if len(result)<K:
+        result.append(codebase.code_base[index])
+    results.append(result)
+  return results
 
 
 # 在用快速编码器得到初步的结果之后，用慢速分类器对初步的结果进行re-rank
-def rerank(query,pre_results,classifier,config):
+def rerank(query_tokens,pre_results,classifier,config):
   final = []
+  re_scores = np.array([])
   for pr in pre_results:
     code_tokens = pr.code_tokens
-    #TODO
+    input_tokens = [config.tokenizer.cls_token]+query_tokens+[config.tokenizer.sep_token]
+    input_tokens += code_tokens
+    input_tokens = input_tokens[:config.max_seq_length-1]
+    input_tokens += [config.tokenizer.sep_token]
+    padding_length = config.max_seq_length - len(input_tokens)
+    input_tokens += padding_length*[config.tokenizer.pad_token]
+    input_ids = torch.tensor([config.tokenizer.convert_tokens_to_ids(input_tokens)])
+    if config.use_cuda:
+      classifier = classifier.cuda()
+      input_ids = input_ids.cuda()
+    logit = classifier(input_ids)
+    probs = torch.reshape(torch.softmax(logit,dim=-1).cpu().detach(),(2,))
+    re_scores = np.append(re_scores,probs[1].item())
+  print(re_scores)
+  script = np.argsort(-re_scores,-1,'quicksort',None)
+  print(script)
+  for i in script:
+    if len(final)<config.final_K:
+      final.append(pre_results[i])
   return final
+
+# 读取从codebase里获取的结果数组的信息
+def get_info(result):
+  for res in result:
+    print(res.code)
