@@ -4,6 +4,8 @@ import os
 import re
 import string
 from config_class import Config
+from transformers import RobertaTokenizer
+from utils import convert_examples_to_features
 
 """
 本文件对CodeSearchNet的源数据进行一定的处理：
@@ -36,20 +38,18 @@ class DataFilterer:
             self.data = self.load_data(self.data_path)
         else:
             self.data = data
-        self.filter_table = ['<p','()','=','<br','>','/','<ul','<li','<ol','{','{@','}','\n','(',')','*','@','--']
+        self.filter_table = ['<p','()','=','/','{','}','(',')','*','-',',']
 
     def filter(self,data):
         result = []
         for i in range(len(data)):
+            data[i].docstring = self.truncate(data[i])
             if self.too_short(data[i]):
                 continue
             elif self.has_chinese(data[i]):
                 continue
-            elif self.has_java(data[i]):
-                continue
             else:
-                data[i].nl_tokens = self.detach_punctuation(data[i])
-                data[i].nl_tokens = self.too_long(data[i])
+                data[i].docstring = self.has_java(data[i])
                 result.append(data[i])
         return result
 
@@ -65,7 +65,7 @@ class DataFilterer:
     # 第一条过滤规则：nl_tokens长度过小的数据需要被过滤.注意，判断nl_tokens的长度是在去除标点符号后判断的
     def too_short(self,example):
         punc = string.punctuation
-        nl_tokens = example.nl_tokens
+        nl_tokens = example.docstring.split(' ')
         length = 0
         for token in nl_tokens:
             if token not in punc:
@@ -80,40 +80,32 @@ class DataFilterer:
                 return True
         return False
     
-    # 第三条规则：考虑将一些过长的nl_tokens截断(考虑截断tokens长度大于20的，从第一个句号前截断)
-    def too_long(self,example):
-        if len(example.nl_tokens) > 20:
-            nl_tokens = example.nl_tokens
-            loc = len(nl_tokens)-1
-            for index in range(len(nl_tokens)):
-                if nl_tokens[index] == ".":
-                    loc = index
-                    break
-            return nl_tokens[:loc+1]
-        else:
-            return example.nl_tokens
-    
-    # 第四条规则：考虑将第一句中含有javadoc标识符的注释过滤掉
-    def has_java(self,example):
-        nl = example.docstring
-        nl = nl.split('.')
-        if '@' in nl[0]:
-            return True
-        return False
+    # 第三条规则：只保留docstring的第一句话(以句号或者换行符作为句子结束标志),同时过滤一些黑名单中的符号
+    def truncate(self,example):
+        nl = ""
+        for char in example.docstring:
+            if (char != '.') and (char not in self.filter_table):
+                if char == '\n':
+                    nl += ' '
+                else:
+                    nl += char
+            elif (char != '.') and (char in self.filter_table):
+                continue
+            else:
+                break
+        return nl
 
-    # 第五条规则：将docstring_tokens中含有黑名单中符号的部分拿掉
-    def detach_punctuation(self,example):
-        nl_tokens = []
-        for i in range(len(example.nl_tokens)):
-            flag = False
-            for p in self.filter_table:
-                if p in example.nl_tokens[i]:
-                    flag = True
-                    break
-            if flag == False:
-                nl_tokens.append(example.nl_tokens[i])
-        return nl_tokens
     
+    # 第四条规则：将javadoc符号拿走
+    def has_java(self,example):
+        nl_tokens = example.docstring.spilt(' ')
+        nl = ""
+        for token in nl_tokens:
+            if '@' not in token:
+                nl += token
+        return nl
+
+ 
 
 # 用多文件数据构建classifier数据集
 def process_files(filter=True,shuffle = False):
@@ -275,7 +267,7 @@ def filter_encoder_data(data_path,out_path):
 
 # 把所有的训练数据弄到一个文件里
 def converge():
-    prefix = "./CodeSearchNet/classifier/java_train_scc"
+    prefix = "./CodeSearchNet/classifier/java_train_cc"
     out_path = "./CodeSearchNet/classifier/java_train_c3.jsonl"
     f = open(out_path,'a')
     for train_no in range(16):
@@ -289,6 +281,7 @@ def converge():
                 read['docstring_tokens'] = js['docstring_tokens']
                 read['code'] = js['code']
                 read['code_tokens'] = js['code_tokens']
+                read['label'] = js['label']
                 f.write(json.dumps(read)+'\n')
     f.close()
     
@@ -346,7 +339,7 @@ def build_by_categorized(data_path,out_path):
 # 用func_name和repo来增强查询
 def strengthen_query(data):
     for example in data:
-        nl_tokens = [example.repo.split('/'[-1])]
+        nl_tokens = example.repo.split('/'[-1])
         nl_tokens.extend(example.func_name.split('.'))
         nl_tokens.extend(example.nl_tokens)
         example.nl_tokens = nl_tokens
@@ -359,14 +352,14 @@ def write_to_file(data,file,type='encoder'):
                 js['repo'] = example.repo
                 js['func_name'] = example.func_name
             js['docstring'] = example.docstring
-            js['docstring_tokens'] = example.docstring_tokens
+            js['docstring_tokens'] = example.nl_tokens
             js['code'] = example.code
             js['code_tokens'] = example.code_tokens
             f.write(json.dumps(js)+"\n")
 
 # 处理数据的pipeline:读入一个原始数据文件，分别输出一个encoder的文件以及一个classifier的文件
 # 处理流程包括了查询增强、过滤数据、按照func_name分类、构建classifier数据、将数据写入到输出文件等
-def pipeline(data_path,encoder_out_path,classifier_out_path):
+def pipeline(data_path,encoder_out_path,classifier_out_path,filter = True):
     # 读入数据
     data = []
     with open(data_path,'r') as f:
@@ -375,10 +368,12 @@ def pipeline(data_path,encoder_out_path,classifier_out_path):
             example = TrainData(js['code_tokens'],js['docstring_tokens'],js['code'],js['docstring'],js['func_name'],js['repo'])
             data.append(example)
     #查询增强
-    strengthen_query(data)
+    #strengthen_query(data)
+
     #过滤数据并写入文件
-    df = DataFilterer(data_path=None,data=data)
-    data = df.filter(df.data)
+    if filter == True:
+        df = DataFilterer(data_path=None,data=data)
+        data = df.filter(df.data)
     write_to_file(data,encoder_out_path,'encoder')
 
     #按照func_name分类
@@ -388,14 +383,38 @@ def pipeline(data_path,encoder_out_path,classifier_out_path):
     build_by_categorized(temp_file,classifier_out_path)
     os.remove(temp_file)
 
+def read_data(data_path):
+    res = []
+    with open(data_path,'r') as f:
+        for line in f.readlines():
+            js = json.loads(line)
+            example = TrainData(js['code_tokens'],js['docstring_tokens'],js['code'],js['docstring'],js['func_name'],js['repo'])
+            res.append(example)
+    return res
 
 if __name__ == "__main__":
     # train_path = "./CodeSearchNet/classifier/java_train_cl.jsonl"
     # out_path = "./CodeSearchNet/classifier/java_train_c.jsonl"
     # process_a_file(train_path,out_path,True,True)
-    # converge()
     config = Config()
-    for i in range(16):
-        data_path = config.data_path+"/strengthened/java_train_s"+str(i)+".jsonl"
-        out_path = config.data_path+"/filtered_data/java_train_sf"+str(i)+".jsonl"
-        filter_encoder_data(data_path,out_path)
+    # test_path = config.data_path + "/origin_data/java_test_0.jsonl"
+    # eop = config.data_path+"/strengthened/java_test_s0.jsonl"
+    # cop = config.data_path +"/classifier/e_test_0.jsonl"
+    # pipeline(test_path,eop,cop,filter=False)
+    # converge()
+    string = "Returns the <a href=\"http://en.wikipedia.org/wiki/Arithmetic_mean\">arithmetic mean</a> of the\nvalues."
+    pt = re.search(r'<+[\s\S]*>+',string)
+    res = ""
+    filter_table = ['<p','()','=','/','{','}','(',')','*','-',',']
+    for char in string:
+        if (char != '.') and (char not in filter_table):
+            if char == '\n':
+                res += ' '
+            else:
+                res += char
+        elif (char != '.') and (char in filter_table):
+            continue
+        else:
+            break
+    print(res)
+    print(pt)

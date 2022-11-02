@@ -16,17 +16,17 @@ def train_classifier(dataloader,eval_dataloader,classifier,config):
 
     classifier.zero_grad()
     loss_func = nn.CrossEntropyLoss()
-    optimizer = torch.optim.AdamW(classifier.parameters(),lr=3e-6)
+    optimizer = torch.optim.AdamW(classifier.parameters(),lr=2e-6)
     num_training = len(dataloader)*config.classifier_epoches
     scheduler = get_linear_schedule_with_warmup(optimizer,num_warmup_steps=num_training/10,num_training_steps=num_training)
 
 
-    if os.path.exists(config.saved_path+"/classifier.pt"):
-        classifier.load_state_dict(torch.load(config.saved_path+"/classifier.pt"))
-    if os.path.exists(config.saved_path+"/c_optimizer.pt"):
-        optimizer.load_state_dict(torch.load(config.saved_path+"/c_optimizer.pt"))
-    if os.path.exists(config.saved_path+"/scheduler.pt"):
-        scheduler.load_state_dict(torch.load(config.saved_path+"/c_scheduler.pt"))
+    if os.path.exists(config.saved_path+"/classifier2.pt"):
+        classifier.load_state_dict(torch.load(config.saved_path+"/classifier2.pt"))
+    if os.path.exists(config.saved_path+"/c_optimizer2.pt"):
+        optimizer.load_state_dict(torch.load(config.saved_path+"/c_optimizer2.pt"))
+    if os.path.exists(config.saved_path+"/scheduler2.pt"):
+        scheduler.load_state_dict(torch.load(config.saved_path+"/c_scheduler2.pt"))
     if config.use_cuda:
         classifier = classifier.cuda()
 
@@ -49,13 +49,13 @@ def train_classifier(dataloader,eval_dataloader,classifier,config):
             scheduler.step()
             total_step += 1
             if step%500 == 0:
-                log_file = open('./model_saved/log_epoch15_4.txt','a')
+                log_file = open('./model_saved/log_epoch1.txt','a')
                 log = "epoch:{},step:{},avg_loss:{}".format(epoch+1,step,total_loss/total_step)
                 print(log)
                 log_file.write(log+"\n")
                 log_file.close()
             if step%35000 == 0:
-                log_file = open('./model_saved/log_epoch15_4.txt','a')
+                log_file = open('./model_saved/log_epoch1.txt','a')
                 log = "开始evaluation..."
                 print(log)
                 log_file.write(log+"\n")
@@ -64,9 +64,9 @@ def train_classifier(dataloader,eval_dataloader,classifier,config):
                 log_file.close()
                 if acc>max_acc:
                     max_acc = acc
-                    torch.save(classifier.state_dict(),config.saved_path+"/classifier.pt")
-                    torch.save(optimizer.state_dict(),config.saved_path+"/c_optimizer.pt")
-                    torch.save(scheduler.state_dict(),config.saved_path+"/c_scheduler.pt")
+                    torch.save(classifier.state_dict(),config.saved_path+"/classifier2.pt")
+                    torch.save(optimizer.state_dict(),config.saved_path+"/c_optimizer2.pt")
+                    torch.save(scheduler.state_dict(),config.saved_path+"/c_scheduler2.pt")
 
 # 训练原版分类器
 def train_classifier2(dataloader,classifier,config):
@@ -137,6 +137,6 @@ if __name__ == "__main__":
     elif choice == 3:
         train_dataset = ClassifierDataset2(config,'train')
         train_dataloader = DataLoader(train_dataset,config.train_batch_size)
-        eval_dataset = ClassifierDataset(config,0,'eval')
+        eval_dataset = ClassifierDataset2(config,'eval')
         eval_dataloader = DataLoader(eval_dataset,config.eval_batch_size)
         train_classifier(train_dataloader,eval_dataloader,classifier,config)

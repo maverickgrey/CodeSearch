@@ -11,8 +11,8 @@ from utils import cos_similarity,get_priliminary
 
 
 def eval_encoder(dataloader,encoder,config,test = False,ret = False,during_train=False):
-  if os.path.exists(config.saved_path+"/encoder.pt") and during_train==False:
-    encoder.load_state_dict(torch.load(config.saved_path+"/encoder.pt"))
+  if os.path.exists(config.saved_path+"/encoder2.pt") and during_train==False:
+    encoder.load_state_dict(torch.load(config.saved_path+"/encoder2.pt"))
 
   loss_func = torch.nn.CrossEntropyLoss()
   total_loss = 0
@@ -28,6 +28,8 @@ def eval_encoder(dataloader,encoder,config,test = False,ret = False,during_train
   for step,example in enumerate(dataloader):
     pl_ids = example[0]
     nl_ids = example[1]
+    print(pl_ids.shape)
+    print(nl_ids.shape)
 
     if config.use_cuda:
       pl_ids = pl_ids.cuda()
@@ -78,8 +80,6 @@ def eval_encoder(dataloader,encoder,config,test = False,ret = False,during_train
         loc += 1
     nl_no += 1
   mrr = np.mean(rank)
-  print(len(rank))
-  print(rank)
   print("Current Loss:{},Current MRR :{},Current ans_k:{}".format(total_loss/num_step ,mrr,ans_k))
   if test:
     return scores
@@ -127,5 +127,5 @@ if __name__ == '__main__':
   config = Config()
   encoder = CasEncoder()
   dataset = CodeSearchDataset(config,'test')
-  dataloader = DataLoader(dataset,config.eval_batch_size)
+  dataloader = DataLoader(dataset,config.eval_batch_size,collate_fn=dataset.collate_fn)
   eval_encoder(dataloader,encoder,config,test=False,ret=False,during_train=False)

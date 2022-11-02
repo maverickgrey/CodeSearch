@@ -61,28 +61,30 @@ class CodeBase(object):
 
 
 # 把数据转换成模型能够处理的形式
-def convert_examples_to_features(js,no,config,classifier=0):
-  if classifier==0:
-    nl = ' '.join(js['docstring_tokens'])
+# type=0时转换成encoder使用的形式
+# type=1时转换成SimpleClassifier使用的形式
+# 其它时候转换成CasClassifer使用的形式
+def convert_examples_to_features(js,no,config,type=0):
+  if type==0:
+    nl = js['docstring']
     nl_tokens = config.tokenizer.tokenize(nl)
     nl_tokens = nl_tokens[:config.max_seq_length-2]
     nl_tokens = [config.tokenizer.cls_token]+nl_tokens+[config.tokenizer.sep_token]
     nl_ids = config.tokenizer.convert_tokens_to_ids(nl_tokens)
-    padding_length = config.max_seq_length - len(nl_ids)
-    nl_ids += [config.tokenizer.pad_token_id]*padding_length
+    # 现在nl、pl的padding都在dataloader中使用collate_fn函数进行
+    # padding_length = config.max_seq_length - len(nl_ids)
+    # nl_ids += [config.tokenizer.pad_token_id]*padding_length
 
-    pl = ' '.join(js['code_tokens'])
+    pl = js['code']
     pl_tokens = config.tokenizer.tokenize(pl)
     pl_tokens = pl_tokens[:config.max_seq_length-2]
     pl_tokens = [config.tokenizer.cls_token]+pl_tokens+[config.tokenizer.sep_token]
     pl_ids = config.tokenizer.convert_tokens_to_ids(pl_tokens)
-    padding_length = config.max_seq_length - len(pl_ids)
-    pl_ids += [config.tokenizer.pad_token_id]*padding_length
     return InputFeatures(nl_tokens,nl_ids,pl_tokens,pl_ids,no)
-  elif classifier == 1:
-    nl = ' '.join(js['docstring_tokens'])
+  elif type == 1:
+    nl = js['docstring']
     nl_tokens = config.tokenizer.tokenize(nl)
-    pl = ' '.join(js['code_tokens'])
+    pl = js['code']
     pl_tokens = config.tokenizer.tokenize(pl)
     input_tokens = [config.tokenizer.cls_token]+nl_tokens+[config.tokenizer.sep_token]
     input_tokens += pl_tokens
@@ -94,7 +96,7 @@ def convert_examples_to_features(js,no,config,classifier=0):
     label = js['label']
     return SimpleClassifierFeatures(input_tokens,input_ids,label)
   else:
-    nl = ' '.join(js['docstring_tokens'])
+    nl = js['docstring']
     nl_tokens = config.tokenizer.tokenize(nl)
     nl_tokens = nl_tokens[:config.max_seq_length-2]
     nl_tokens = [config.tokenizer.cls_token]+nl_tokens+[config.tokenizer.sep_token]
@@ -102,7 +104,7 @@ def convert_examples_to_features(js,no,config,classifier=0):
     padding_length = config.max_seq_length - len(nl_ids)
     nl_ids += [config.tokenizer.pad_token_id]*padding_length
 
-    pl = ' '.join(js['code_tokens'])
+    pl = js['code']
     pl_tokens = config.tokenizer.tokenize(pl)
     pl_tokens = pl_tokens[:config.max_seq_length-2]
     pl_tokens = [config.tokenizer.cls_token]+pl_tokens+[config.tokenizer.sep_token]

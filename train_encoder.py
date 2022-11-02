@@ -25,12 +25,12 @@ def train_encoder(train_dataloader,eval_dataloader,encoder,config):
   scheduler = get_linear_schedule_with_warmup(optimizer,num_warmup_steps=num_training_steps/10,num_training_steps=num_training_steps)
   loss_func = torch.nn.CrossEntropyLoss()
 
-  if os.path.exists(config.saved_path+"/encoder.pt"):
-    encoder.load_state_dict(torch.load(config.saved_path+"/encoder.pt"))
-  if os.path.exists(config.saved_path+"/e_optimizer.pt"):
-    optimizer.load_state_dict(torch.load(config.saved_path+"/e_optimizer.pt"))
-  if os.path.exists(config.saved_path+"/e_cheduler.pt"):
-    scheduler.load_state_dict(torch.load(config.saved_path+"/e_scheduler.pt"))
+  if os.path.exists(config.saved_path+"/encoder2.pt"):
+    encoder.load_state_dict(torch.load(config.saved_path+"/encoder2.pt"))
+  if os.path.exists(config.saved_path+"/e_optimizer2.pt"):
+    optimizer.load_state_dict(torch.load(config.saved_path+"/e_optimizer2.pt"))
+  if os.path.exists(config.saved_path+"/e_scheduler2.pt"):
+    scheduler.load_state_dict(torch.load(config.saved_path+"/e_scheduler2.pt"))
     
   for epoch in range(config.encoder_epoches):
     total_loss = 0
@@ -74,19 +74,19 @@ def train_encoder(train_dataloader,eval_dataloader,encoder,config):
  
       if step%100 == 0:
         print("epoch:{},step:{},avg_loss:{},current_loss:{}".format(epoch+1,step,total_loss/tr_num,current_loss))
-        with open(config.saved_path+"/encoder_log2.txt",'a') as lg:
+        with open(config.saved_path+"/encoder_log3.txt",'a') as lg:
           lg.write("epoch:{},step:{},avg_loss:{},current_loss:{}".format(epoch+1,step,total_loss/tr_num,current_loss)+"\n")
       if step%15000 == 0:
-        avg_loss,mrr = eval_encoder(eval_dataloader,encoder=encoder,config=config,test=False,ret=True,during_train=True)
-        with open(config.saved_path+"/encoder_log2.txt",'a') as lg:
-          lg.write("max_mrr:{},current_mrr:{}".format(max_mrr,mrr))
+        avg_loss,mrr,ans_k = eval_encoder(eval_dataloader,encoder=encoder,config=config,test=False,ret=True,during_train=True)
+        with open(config.saved_path+"/encoder_log3.txt",'a') as lg:
+          lg.write("max_mrr:{},current_mrr:{},ans_k:{}".format(max_mrr,mrr,ans_k))
         if mrr>max_mrr:
           max_mrr = mrr
-          torch.save(encoder.state_dict(),config.saved_path+"/encoder.pt")
-          torch.save(optimizer.state_dict(),config.saved_path+"/e_optimizer.pt")
-          torch.save(scheduler.state_dict(),config.saved_path+"/e_scheduler.pt")
-        with open(config.saved_path+"/encoder_log2.txt",'a') as lg:
-          lg.write("evaluation---avg_loss:{},mrr:{}".format(avg_loss,mrr)+"\n")
+          torch.save(encoder.state_dict(),config.saved_path+"/encoder2.pt")
+          torch.save(optimizer.state_dict(),config.saved_path+"/e_optimizer2.pt")
+          torch.save(scheduler.state_dict(),config.saved_path+"/e_scheduler2.pt")
+        with open(config.saved_path+"/encoder_log3.txt",'a') as lg:
+          lg.write("evaluation---avg_loss:{},mrr:{},ans_k:{}".format(avg_loss,mrr,ans_k)+"\n")
 
 
 

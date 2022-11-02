@@ -15,12 +15,12 @@ def run():
     classifier = SimpleCasClassifier()
 
     print("正在加载模型")
-    if os.path.exists(config.saved_path+"/encoder.pt"):
-        encoder_nl.load_state_dict(torch.load(config.saved_path+"/encoder.pt"))
-        encoder_pl.load_state_dict(torch.load(config.saved_path+"/encoder.pt"))
+    if os.path.exists(config.saved_path+"/encoder2.pt"):
+        encoder_nl.load_state_dict(torch.load(config.saved_path+"/encoder2.pt"))
+        encoder_pl.load_state_dict(torch.load(config.saved_path+"/encoder2.pt"))
 
-    if os.path.exists(config.saved_path+"/classifier.pt"):
-        classifier.load_state_dict(torch.load(config.saved_path+"/classifier.pt"))
+    if os.path.exists(config.saved_path+"/classifier2.pt"):
+        classifier.load_state_dict(torch.load(config.saved_path+"/classifier2.pt"))
 
     if config.use_cuda == True:
         encoder_nl = encoder_nl.cuda()
