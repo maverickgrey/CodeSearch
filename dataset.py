@@ -63,7 +63,7 @@ class CodeSearchDataset(Dataset):
                     #     break
             return examples
         elif mode == 'eval':
-            eval_path = self.config.data_path + "/filtered_data/e_valid.jsonl"
+            eval_path = self.config.data_path + "/filtered_data/java_valid_new.jsonl"
             with open(eval_path,'r',encoding='utf-8') as f:
                 num = 0
                 for line in f.readlines():
@@ -74,7 +74,7 @@ class CodeSearchDataset(Dataset):
             return examples
         else:
             num = 0
-            train_path = self.config.data_path +"/filtered_data"+"/java_train_sf.jsonl"
+            train_path = self.config.data_path +"/filtered_data"+"/java_train_new.jsonl"
             with open(train_path,'r') as f:
                 for line in f.readlines():
                     num+=1
@@ -164,7 +164,7 @@ class ClassifierDataset2(Dataset):
             return examples
         else:
             examples = []
-            path = "./CodeSearchNet/classifier/java_train_c3.jsonl"
+            path = "./CodeSearchNet/classifier/java_train_classifier_p1n1.jsonl"
             with open(path,'r') as f:
                 for line in f.readlines():
                     js = json.loads(line)

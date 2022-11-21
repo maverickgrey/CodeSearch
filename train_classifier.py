@@ -124,19 +124,10 @@ def train_classifier2(dataloader,classifier,config):
 
 
 if __name__ == "__main__":
-    choice = 3
     config = Config()
     classifier = SimpleCasClassifier()
-    if choice == 1:
-        for train_no in range(16):
-            dataset = ClassifierDataset(config,train_no,'train')
-            dataloader = DataLoader(dataset,config.train_batch_size)
-            train_classifier(dataloader,classifier,config)
-    elif choice == 2:
-        train_classifier2(classifier,config)
-    elif choice == 3:
-        train_dataset = ClassifierDataset2(config,'train')
-        train_dataloader = DataLoader(train_dataset,config.train_batch_size)
-        eval_dataset = ClassifierDataset2(config,'eval')
-        eval_dataloader = DataLoader(eval_dataset,config.eval_batch_size)
-        train_classifier(train_dataloader,eval_dataloader,classifier,config)
+    train_dataset = ClassifierDataset2(config,'train')
+    train_dataloader = DataLoader(train_dataset,config.train_batch_size)
+    eval_dataset = ClassifierDataset2(config,'eval')
+    eval_dataloader = DataLoader(eval_dataset,config.eval_batch_size)
+    train_classifier(train_dataloader,eval_dataloader,classifier,config)

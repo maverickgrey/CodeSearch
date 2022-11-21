@@ -15,9 +15,9 @@ def run():
     classifier = SimpleCasClassifier()
 
     print("正在加载模型")
-    if os.path.exists(config.saved_path+"/encoder2.pt"):
-        encoder_nl.load_state_dict(torch.load(config.saved_path+"/encoder2.pt"))
-        encoder_pl.load_state_dict(torch.load(config.saved_path+"/encoder2.pt"))
+    if os.path.exists(config.saved_path+"/encoder3.pt"):
+        encoder_nl.load_state_dict(torch.load(config.saved_path+"/encoder3.pt"))
+        encoder_pl.load_state_dict(torch.load(config.saved_path+"/encoder3.pt"))
 
     if os.path.exists(config.saved_path+"/classifier2.pt"):
         classifier.load_state_dict(torch.load(config.saved_path+"/classifier2.pt"))
@@ -38,8 +38,8 @@ def run():
             line_no = 0
             for line in f.readlines():
                 js = json.loads(line)
-                query_tokens = js['docstring_tokens']
-                query = ' '.join(query_tokens)
+                query = js['docstring']
+                query_tokens = config.tokenizer.tokenize(query)
                 query_vec = query_to_vec(query,config,encoder_nl).cpu()
                 score = cos_similarity(query_vec,codebase.code_vecs).detach().numpy()
                 # 得到相似度分数后先初步获取K个candidates，之后让classifier对这K个candidates重排序
