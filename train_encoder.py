@@ -6,11 +6,12 @@ import torch.nn as nn
 import os
 from utils import cos_similarity
 from eval_encoder import eval_encoder
-from dataset import CodeSearchDataset
+from dataset import CodeSearchDataset,TripletTrainData
 from torch.utils.data import DataLoader,RandomSampler
 from model import CasEncoder
+import logging
 
-
+logging.getLogger().setLevel(logging.INFO)
 def train_encoder(train_dataloader,eval_dataloader,encoder,config):
   max_mrr = 0
   if not os.path.exists(config.saved_path):
@@ -88,14 +89,63 @@ def train_encoder(train_dataloader,eval_dataloader,encoder,config):
         with open(config.saved_path+"/encoder_log4.txt",'a') as lg:
           lg.write("evaluation---avg_loss:{},mrr:{},ans_k:{}".format(avg_loss,mrr,ans_k)+"\n")
 
+# 使用triplet loss来对训练好的encoder进行调整，使用的数据为利用encoder生成的classifier数据，以query为anchor，正样本代码段为positive，负样本代码段为negative
+def tune_encoder(encoder,train_dataloader,eval_dataloader,config):
+  loss_func = nn.TripletMarginLoss(margin=0.6)
+  optimizer = torch.optim.AdamW(encoder.parameters(),1e-5)
+  total_loss = 0
+  total_step = 0
+  if config.use_cuda:
+    encoder = encoder.cuda()
 
+  if os.path.exists(config.saved_path+"/encoder3_tuned.pt"):
+    logging.info("loading tuned model...")
+    encoder.load_state_dict(torch.load(config.saved_path+"/encoder3_tuned.pt"))
+  elif os.path.exists(config.saved_path+"/encoder3.pt"):
+    logging.info("loading model...")
+    encoder.load_state_dict(torch.load(config.saved_path+"/encoder3.pt"))
+
+  if os.path.exists(config.saved_path+"/e_optimizer3_tuned.pt"):
+    logging.info("loading optimizer...")
+    optimizer.load_state_dict(torch.load(config.saved_path+"/e_optimizer3.pt"))
+
+  for epoch in range(2):
+    encoder.train()
+    for step,example in enumerate(train_dataloader):
+      anchor = example[0]
+      positive = example[1]
+      negative = example[2]
+      if config.use_cuda:
+        anchor = anchor.cuda()
+        positive = positive.cuda()
+        negative = negative.cuda()
+      anchor_vec = encoder(None,anchor)
+      positive_vec = encoder(positive,None)
+      negative_vec = encoder(negative,None)
+      loss = loss_func(anchor_vec,positive_vec,negative_vec)
+      total_loss += loss.item()
+      current_loss = loss.item()
+      loss.backward()
+      optimizer.step()
+      optimizer.zero_grad()
+      if step%500 == 0:
+        logging.info("epoch:{},step:{},current_loss:{}".format(epoch+1,step,current_loss))
+    torch.save(encoder.state_dict(),config.saved_path+"/encoder3_tuned.pt")
+    torch.save(optimizer.state_dict(),config.saved_path+"/e_optimizer3_tuned.pt")
+
+      
+    
 
 if __name__ == '__main__':
   config = Config()
-  train_dataset = CodeSearchDataset(config,'train')
-  train_sampler = RandomSampler(train_dataset)
-  train_dataloader = DataLoader(train_dataset,config.train_batch_size,sampler=train_sampler,collate_fn=train_dataset.collate_fn)
-  eval_dataset = CodeSearchDataset(config,'eval')
-  eval_dataloader = DataLoader(eval_dataset,config.eval_batch_size,shuffle=True,collate_fn=eval_dataset.collate_fn)
-  encoder = CasEncoder()
-  train_encoder(train_dataloader,eval_dataloader,encoder,config)
+  # train_dataset = CodeSearchDataset(config,'train')
+  # train_sampler = RandomSampler(train_dataset)
+  # train_dataloader = DataLoader(train_dataset,config.train_batch_size,sampler=train_sampler,collate_fn=train_dataset.collate_fn)
+  # eval_dataset = CodeSearchDataset(config,'eval')
+  # eval_dataloader = DataLoader(eval_dataset,config.eval_batch_size,shuffle=True,collate_fn=eval_dataset.collate_fn)
+  # encoder = CasEncoder()
+  # train_encoder(train_dataloader,eval_dataloader,encoder,config)
+  tune_dataset = TripletTrainData(config)
+  tune_dataloader = DataLoader(tune_dataset,config.train_batch_size)
+  encoder = CasEncoder('one')
+  tune_encoder(encoder,tune_dataloader,None,config)

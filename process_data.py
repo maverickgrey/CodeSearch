@@ -416,8 +416,8 @@ def get_encoder_top_data(encoder,topK,dataloader,config,out_path):
             example_no+=1
         offset += config.eval_batch_size
 
-#   根据encoder的top数据生成分类器数据
-def generate_cls_data(encoder_data,source_data,output_path):
+#   根据encoder的top数据生成分类器数据,同时需要的话还能得到triplet数据
+def generate_cls_data(encoder_data,source_data,output_path,get_triplet=False):
     data = []
     with open(source_data,'r') as fd:
         data = fd.readlines()
@@ -453,9 +453,17 @@ def generate_cls_data(encoder_data,source_data,output_path):
                 negative['docstring'] = p_data['docstring']
                 negative['docstring_tokens'] = p_data['docstring_tokens']
                 negative['label'] = 0
+            if get_triplet:
+                triplet_data = {}
+                triplet_data['anchor'] = positive['docstring']
+                triplet_data['positive'] = positive['code']
+                triplet_data['negative'] = negative['code']
+                with open(config.data_path+"/filtered_data/java_encoder_triplet.jsonl",'a') as ft:
+                    ft.write(json.dumps(triplet_data)+"\n")
             with open(output_path,'a') as out:
                 out.write(json.dumps(positive)+"\n")
                 out.write(json.dumps(negative)+"\n")
+
 
 
 
@@ -474,5 +482,5 @@ if __name__ == "__main__":
     # dataloader = DataLoader(dataset,config.eval_batch_size,collate_fn=dataset.collate_fn)
     # encoder = CasEncoder()
     # get_encoder_top_data(encoder,5,dataloader,config,config.data_path+"/classifier/encoder_top.jsonl")
-    generate_cls_data(config.data_path+"/classifier/encoder_top.jsonl",config.data_path+"/filtered_data/java_train_new.jsonl",config.data_path+"/classifier/java_train_classifier_p1n1.jsonl")
+    generate_cls_data(config.data_path+"/classifier/encoder_top.jsonl",config.data_path+"/filtered_data/java_train_new.jsonl",config.data_path+"/classifier/java_train_classifier_p1n1_1124.jsonl",get_triplet=True)
 

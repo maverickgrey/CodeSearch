@@ -10,8 +10,8 @@ import os
 
 def run():
     config = Config()
-    encoder_nl = CasEncoder(encode='nl')
-    encoder_pl = CasEncoder(encode='code')
+    encoder_nl = CasEncoder(encode='one')
+    encoder_pl = CasEncoder(encode='one')
     classifier = SimpleCasClassifier()
 
     print("正在加载模型")

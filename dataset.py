@@ -152,7 +152,7 @@ class ClassifierDataset2(Dataset):
         elif mode == 'test':
             num = 0
             examples = []
-            eval_path = self.config.data_path+"/classifier/c_test_0.jsonl"
+            eval_path = self.config.data_path+"/classifier/c_test_1.jsonl"
             with open(eval_path,'r') as f:
                 for line in f.readlines():
                     js = json.loads(line)
@@ -180,14 +180,72 @@ class ClassifierDataset2(Dataset):
     def __len__(self):
         return len(self.data)
 
+class TripletTrainData(Dataset):
+    def __init__(self,config):
+        self.config = config
+        self.data = self.load_examples()
+    
+    def load_examples(self):
+        examples = []
+        with open(self.config.data_path+"/filtered_data/java_encoder_triplet.jsonl") as f:
+            for line in f.readlines():
+                js = json.loads(line)
+                example = self.convert_example_to_features(js=js)
+                examples.append(example)
+        return examples
+    
+    def convert_example_to_features(self,js):
+        example = {}
+        anchor = js['anchor']
+        positive = js['positive']
+        negative = js['negative']
+        anchor_token = self.config.tokenizer.tokenize(anchor)
+        anchor_token = anchor_token[:self.config.max_seq_length-2]
+        anchor_token = [self.config.tokenizer.cls_token]+anchor_token+[self.config.tokenizer.sep_token]
+        padding_len = self.config.max_seq_length-len(anchor_token)
+        anchor_token += padding_len*[self.config.tokenizer.pad_token]
+        anchor_ids = self.config.tokenizer.convert_tokens_to_ids(anchor_token)
+
+        positive_token = self.config.tokenizer.tokenize(positive)
+        positive_token = positive_token[:self.config.max_seq_length-2]
+        positive_token = [self.config.tokenizer.cls_token]+positive_token+[self.config.tokenizer.sep_token]
+        padding_len = self.config.max_seq_length-len(positive_token)
+        positive_token += padding_len*[self.config.tokenizer.pad_token]
+        positive_ids = self.config.tokenizer.convert_tokens_to_ids(positive_token)
+
+        negative_token = self.config.tokenizer.tokenize(negative)
+        negative_token = negative_token[:self.config.max_seq_length-2]
+        negative_token = [self.config.tokenizer.cls_token]+negative_token+[self.config.tokenizer.sep_token]
+        padding_len = self.config.max_seq_length-len(negative_token)
+        negative_token += padding_len*[self.config.tokenizer.pad_token]
+        negative_ids = self.config.tokenizer.convert_tokens_to_ids(negative_token)
+
+        example['anchor'] = anchor_ids
+        example['positive'] = positive_ids
+        example['negative'] = negative_ids
+        return example
+    
+    def __getitem__(self, index):
+        _data = self.data[index]
+        anchor = _data['anchor']
+        positive = _data['positive']
+        negative = _data['negative']
+        return (torch.tensor(anchor),torch.tensor(positive),torch.tensor(negative))
+    
+    def __len__(self):
+        return len(self.data)
+    
+    def collate_fn(self,batch):
+        pass
+        #TODO implement
+
 
 if __name__ == "__main__":
     config = Config()
-    dataset = CodeSearchDataset(config,'test')
-    dataloader = DataLoader(dataset,batch_size=4,collate_fn=dataset.collate_fn)
+    dataset = TripletTrainData(config)
+    dataloader = DataLoader(dataset,batch_size=4)
     for _,example in enumerate(dataloader):
-        print(example[0].shape)
-        print(example[1].shape)
+        print(example)
     
     # dataset = ClassifierDataset(config,'eval')
     # dataloader = DataLoader(dataset,batch_size = 4)

@@ -27,15 +27,17 @@ class CasEncoder(nn.Module):
       return code_vec,nl_vec
     
     # 只会对NL或PL中的一种进行编码
-    elif encode == "nl":
-      inputs = nl_inputs
-      nl_vec = self.encoder(inputs,attention_mask=inputs.ne(1)).pooler_output
-      return nl_vec
-    
-    elif encode == "code":
-      inputs = pl_inputs
-      code_vec = self.encoder(inputs,attention_mask=inputs.ne(1)).pooler_output
-      return code_vec
+    elif encode == "one":
+      if (pl_inputs is not None) and (nl_inputs==None):
+        inputs = pl_inputs
+        code_vec = self.encoder(inputs,attention_mask=inputs.ne(1)).pooler_output
+        return code_vec
+      elif (pl_inputs==None) and (nl_inputs is not None):
+        inputs = nl_inputs
+        nl_vec = self.encoder(inputs,attention_mask=inputs.ne(1)).pooler_output
+        return nl_vec
+      else:
+        raise("此模式下code或nl只能有一个不为空")
     else:
       print("编码器的模式只能为both、nl、code!")
 
