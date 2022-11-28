@@ -7,9 +7,10 @@ import torch
 import json
 import os
 import logging
+import datetime
 
 logging.getLogger().setLevel(logging.INFO)
-logging.basicConfig(filename="./model_saved/run_log.log",level=logging.INFO)
+# logging.basicConfig(filename="./model_saved/run_log.log",level=logging.INFO)
 def run():
     config = Config()
     encoder_nl = CasEncoder(encode='one')
@@ -69,6 +70,7 @@ def run():
             query = input("你想查询什么？(退出输入c)")
             if query == 'c':
                 break
+            start_time = datetime.datetime.now()
             query_tokens = query.split(' ')
             query_vec = query_to_vec(query,config,encoder_nl).cpu()
             scores = cos_similarity(query_vec,codebase.code_vecs)
@@ -77,6 +79,9 @@ def run():
             for _pre in pre:
                 final = rerank(query_tokens,_pre,classifier,config)
                 get_info(final)
+            final_time = datetime.datetime.now()
+            time_cost = (final_time-start_time).seconds
+            logging.info("本次查询消耗时间：{}s".format(time_cost))
     
 if __name__ == "__main__":
     run()
