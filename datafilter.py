@@ -2,17 +2,18 @@ import json
 import string
 import re
 
-class ExampleData:
-    def __init__(self,code_tokens,nl_tokens,code,docstring,func_name,repo):
-        self.code_tokens = code_tokens
-        self.nl_tokens = nl_tokens
-        self.code = code
-        self.docstring = docstring
-        self.func_name = func_name
-        self.repo = repo
-
 # 对查询进行过滤的过滤器
 class DataFilterer:
+    # 内部类，用于datafiler处理数据方便
+    class ExampleData:
+        def __init__(self,code_tokens,nl_tokens,code,docstring,func_name,repo):
+            self.code_tokens = code_tokens
+            self.nl_tokens = nl_tokens
+            self.code = code
+            self.docstring = docstring
+            self.func_name = func_name
+            self.repo = repo
+    
     def __init__(self,data_path=None,data=None):
         if data is None:
             self.data_path = data_path
@@ -40,7 +41,7 @@ class DataFilterer:
         with open(data_path,'r') as f:
             for line in f.readlines():
                 js = json.loads(line)
-                data.append(ExampleData(js['code_tokens'],js['docstring_tokens'],js['code'],js['docstring'],js['func_name'],js['repo']))
+                data.append(self.ExampleData(js['code_tokens'],js['docstring_tokens'],js['code'],js['docstring'],js['func_name'],js['repo']))
         return data
     
     # 一些过滤规则，True则应该过滤，False则不应该过滤
@@ -76,7 +77,7 @@ class DataFilterer:
             else:
                 break
         return nl
-        
+
     # 第四条规则：将javadoc符号拿走
     def has_java(self,example):
         nl_tokens = example.docstring.split(' ')

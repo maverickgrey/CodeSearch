@@ -1,7 +1,6 @@
 from torch.utils.data import Dataset,DataLoader
 import json
 import torch
-from utils import convert_examples_to_features
 from config_class import Config
 import datastruct
 
@@ -57,7 +56,7 @@ class CodeSearchDataset(Dataset):
                 for line in f.readlines():
                     num += 1
                     js = json.loads(line)
-                    example = convert_examples_to_features(js,num,self.config,type=0)
+                    example = self.convert_examples_to_features(js,num,self.config,type=0)
                     examples.append(example)
                     # if num>10:
                     #     break
@@ -69,7 +68,7 @@ class CodeSearchDataset(Dataset):
                 for line in f.readlines():
                     num += 1
                     js = json.loads(line)
-                    example = convert_examples_to_features(js,num,self.config,type=0)
+                    example = self.convert_examples_to_features(js,num,self.config,type=0)
                     examples.append(example)
             return examples
         else:
@@ -117,7 +116,7 @@ class ClassifierDataset(Dataset):
             with open(eval_path,'r') as f:
                 for line in f.readlines():
                     js = json.loads(line)
-                    example = convert_examples_to_features(js,-1,self.config,2)
+                    example = self.convert_examples_to_features(js,-1,self.config,2)
                     examples.append(example)
                     num += 1
                     # if num > 100:
@@ -179,7 +178,7 @@ class ClassifierDataset2(Dataset):
             with open(eval_path,'r') as f:
                 for line in f.readlines():
                     js = json.loads(line)
-                    example = convert_examples_to_features(js,-1,self.config,1)
+                    example = self.convert_examples_to_features(js,-1,self.config,1)
                     examples.append(example)
                     num += 1
                     # if num > 100:
@@ -192,7 +191,7 @@ class ClassifierDataset2(Dataset):
             with open(eval_path,'r') as f:
                 for line in f.readlines():
                     js = json.loads(line)
-                    example = convert_examples_to_features(js,-1,self.config,1)
+                    example = self.convert_examples_to_features(js,-1,self.config,1)
                     examples.append(example)
                     num += 1
                     # if num > 100:
@@ -204,7 +203,7 @@ class ClassifierDataset2(Dataset):
             with open(path,'r') as f:
                 for line in f.readlines():
                     js = json.loads(line)
-                    example = convert_examples_to_features(js,-1,self.config,1)
+                    example = self.convert_examples_to_features(js,-1,self.config,1)
                     examples.append(example)
             return examples
 
