@@ -2,118 +2,9 @@ from config_class import Config
 import torch
 import math
 import numpy as np
-
-# 为了方便处理encoder的数据所使用的数据结构
-class InputFeatures(object):
-  def __init__(self,nl_tokens,nl_ids,pl_tokens,pl_ids,id):
-    self.nl_tokens = nl_tokens
-    self.nl_ids = nl_ids
-    self.pl_tokens = pl_tokens
-    self.pl_ids = pl_ids
-    self.id = id
-
-# 为了方便处理simpleclassifier的数据使用的数据结构
-class SimpleClassifierFeatures(object):
-  def __init__(self,tokens,token_ids,label):
-    self.token_ids=token_ids
-    self.tokens = tokens
-    self.label = label
-
-#
-class CasClassifierFeatures:
-  def __init__(self,pl_tokens,pl_ids,nl_tokens,nl_ids,label):
-    self.pl_tokens = pl_tokens
-    self.pl_ids = pl_ids
-    self.nl_tokens = nl_tokens
-    self.nl_ids = nl_ids
-    self.label = label
-
-# 运行整个流程，即进行代码搜索时使用的数据结构
-class CodeStruct(object):
-  def __init__(self,code_vec,code_tokens,code,no):
-    self.code_tokens = code_tokens
-    self.code_vec = code_vec
-    self.code = code
-    self.no = no
-
-# 用来暂时模拟代码库的数据结构，里面存放的是codestruct
-class CodeBase(object):
-  def __init__(self,code_base):
-    self.base_size = len(code_base)
-    self.code_base = code_base
-    self.code_vecs = self.get_code_vecs()
+import json
+from datastruct import CodeBase,CodeStruct
   
-  def get_code_vecs(self):
-    code_vecs = []
-    for code in self.code_base:
-      code_vecs.append(code.code_vec)
-    return torch.tensor(code_vecs)
-  
-  def get_code(self,index):
-    return self.code_base[index].code
-  
-  def get_code_vec(self,index):
-    return self.code_base[index].code_vec
-  
-  def get_info(self):
-    for c in self.code_base:
-      print("code:",c.code)
-
-
-# 把数据转换成模型能够处理的形式
-# type=0时转换成encoder使用的形式
-# type=1时转换成SimpleClassifier使用的形式
-# 其它时候转换成CasClassifer使用的形式
-def convert_examples_to_features(js,no,config,type=0):
-  if type==0:
-    nl = js['docstring']
-    nl_tokens = config.tokenizer.tokenize(nl)
-    nl_tokens = nl_tokens[:config.max_seq_length-2]
-    nl_tokens = [config.tokenizer.cls_token]+nl_tokens+[config.tokenizer.sep_token]
-    nl_ids = config.tokenizer.convert_tokens_to_ids(nl_tokens)
-    # 现在nl、pl的padding都在dataloader中使用collate_fn函数进行
-    # padding_length = config.max_seq_length - len(nl_ids)
-    # nl_ids += [config.tokenizer.pad_token_id]*padding_length
-
-    pl = js['code']
-    pl_tokens = config.tokenizer.tokenize(pl)
-    pl_tokens = pl_tokens[:config.max_seq_length-2]
-    pl_tokens = [config.tokenizer.cls_token]+pl_tokens+[config.tokenizer.sep_token]
-    pl_ids = config.tokenizer.convert_tokens_to_ids(pl_tokens)
-    return InputFeatures(nl_tokens,nl_ids,pl_tokens,pl_ids,no)
-  elif type == 1:
-    nl = js['docstring']
-    nl_tokens = config.tokenizer.tokenize(nl)
-    pl = js['code']
-    pl_tokens = config.tokenizer.tokenize(pl)
-    input_tokens = [config.tokenizer.cls_token]+nl_tokens+[config.tokenizer.sep_token]
-    input_tokens += pl_tokens
-    input_tokens = input_tokens[:config.max_seq_length-1]
-    input_tokens +=[config.tokenizer.sep_token]
-    padding_length = config.max_seq_length - len(input_tokens)
-    input_tokens += [config.tokenizer.pad_token]*padding_length
-    input_ids = config.tokenizer.convert_tokens_to_ids(input_tokens)
-    label = js['label']
-    return SimpleClassifierFeatures(input_tokens,input_ids,label)
-  else:
-    nl = js['docstring']
-    nl_tokens = config.tokenizer.tokenize(nl)
-    nl_tokens = nl_tokens[:config.max_seq_length-2]
-    nl_tokens = [config.tokenizer.cls_token]+nl_tokens+[config.tokenizer.sep_token]
-    nl_ids = config.tokenizer.convert_tokens_to_ids(nl_tokens)
-    padding_length = config.max_seq_length - len(nl_ids)
-    nl_ids += [config.tokenizer.pad_token_id]*padding_length
-
-    pl = js['code']
-    pl_tokens = config.tokenizer.tokenize(pl)
-    pl_tokens = pl_tokens[:config.max_seq_length-2]
-    pl_tokens = [config.tokenizer.cls_token]+pl_tokens+[config.tokenizer.sep_token]
-    pl_ids = config.tokenizer.convert_tokens_to_ids(pl_tokens)
-    padding_length = config.max_seq_length - len(pl_ids)
-    pl_ids += [config.tokenizer.pad_token_id]*padding_length
-    label = js['label']
-    return CasClassifierFeatures(pl_tokens,pl_ids,nl_tokens,nl_ids,label)
-    
 def print_features(features):
   for f in features:
     print("idx:{},nl_tokens:{},nl_ids:{},pl_tokens:{},pl_ids:{}".format(f.idx,f.nl_tokens,f.nl_ids,f.pl_tokens,f.pl_ids))
@@ -187,3 +78,40 @@ def rerank(query_tokens,pre_results,classifier,config):
 def get_info(result):
   for res in result:
     print(res.code)
+
+# 将代码转换成向量并存入数据库中
+def load_codebase(data_path,config,encoder):
+    code_base = []
+    with open(data_path,'r') as d:
+        code_no = 0 
+        for line in d.readlines():
+            js = json.loads(line)
+            pl = ' '.join(js['code_tokens'])
+            origin_pl = js['code']
+            pl_tokens = config.tokenizer.tokenize(pl)
+            origin_pl_tokens = pl_tokens
+            pl_tokens = pl_tokens[:config.max_seq_length-2]
+            pl_tokens = [config.tokenizer.cls_token] + pl_tokens +[config.tokenizer.sep_token]
+            padding_length = config.max_seq_length-len(pl_tokens)
+            pl_tokens += padding_length*[config.tokenizer.pad_token]
+            pl_ids = torch.tensor([config.tokenizer.convert_tokens_to_ids(pl_tokens)])
+            if config.use_cuda:
+                pl_ids = pl_ids.cuda()
+            pl_vec = torch.reshape(encoder(pl_ids,None),(768,)).cpu().tolist()
+            code_struct = CodeStruct(pl_vec,origin_pl_tokens,origin_pl,code_no)
+            code_base.append(code_struct)
+            code_no += 1
+    return CodeBase(code_base)
+
+# 将一条自然语言查询转换为向量，这个向量的维数为(1,768)，注意是二维的
+def query_to_vec(query,config,encoder):
+    query_tokens = config.tokenizer.tokenize(query)
+    query_tokens = query_tokens[:config.max_seq_length-2]
+    query_tokens = [config.tokenizer.cls_token]+query_tokens+[config.tokenizer.sep_token]
+    padding_length = config.max_seq_length - len(query_tokens)
+    query_tokens += padding_length*[config.tokenizer.pad_token]
+    query_ids = torch.tensor([config.tokenizer.convert_tokens_to_ids(query_tokens)])
+    if config.use_cuda:
+        query_ids = query_ids.cuda()
+    query_vec = encoder(None,query_ids)
+    return query_vec

@@ -3,7 +3,7 @@ import json
 import torch
 from utils import convert_examples_to_features
 from config_class import Config
-
+import datastruct
 
 # 训练encoder的数据集与一般使用时的数据集
 class CodeSearchDataset(Dataset):
@@ -79,11 +79,28 @@ class CodeSearchDataset(Dataset):
                 for line in f.readlines():
                     num+=1
                     js = json.loads(line)
-                    example = convert_examples_to_features(js,num,self.config,type=0)
+                    example = self.convert_examples_to_features(js,num,self.config)
                     examples.append(example)
                     # if num>9999:
                     #   break
             return examples
+    
+    def convert_examples_to_features(js,no,config):
+            nl = js['docstring']
+            nl_tokens = config.tokenizer.tokenize(nl)
+            nl_tokens = nl_tokens[:config.max_seq_length-2]
+            nl_tokens = [config.tokenizer.cls_token]+nl_tokens+[config.tokenizer.sep_token]
+            nl_ids = config.tokenizer.convert_tokens_to_ids(nl_tokens)
+            # 现在nl、pl的padding都在dataloader中使用collate_fn函数进行
+            # padding_length = config.max_seq_length - len(nl_ids)
+            # nl_ids += [config.tokenizer.pad_token_id]*padding_length
+
+            pl = js['code']
+            pl_tokens = config.tokenizer.tokenize(pl)
+            pl_tokens = pl_tokens[:config.max_seq_length-2]
+            pl_tokens = [config.tokenizer.cls_token]+pl_tokens+[config.tokenizer.sep_token]
+            pl_ids = config.tokenizer.convert_tokens_to_ids(pl_tokens)
+            return datastruct.EncoderFeatures(nl_tokens,nl_ids,pl_tokens,pl_ids,no)
 
 # 专门用来训练CasClassifier的数据集
 class ClassifierDataset(Dataset):
@@ -114,7 +131,7 @@ class ClassifierDataset(Dataset):
             with open(train_path,'r') as f:
                 for line in f.readlines():
                     js = json.loads(line)
-                    example = convert_examples_to_features(js,-1,self.config,2)
+                    example = self.convert_examples_to_features(js,self.config)
                     examples.append(example)
             return examples
 
@@ -126,6 +143,25 @@ class ClassifierDataset(Dataset):
     
     def __len__(self):
         return len(self.data)
+    
+    def convert_examples_to_features(js,config):
+            nl = js['docstring']
+            nl_tokens = config.tokenizer.tokenize(nl)
+            nl_tokens = nl_tokens[:config.max_seq_length-2]
+            nl_tokens = [config.tokenizer.cls_token]+nl_tokens+[config.tokenizer.sep_token]
+            nl_ids = config.tokenizer.convert_tokens_to_ids(nl_tokens)
+            padding_length = config.max_seq_length - len(nl_ids)
+            nl_ids += [config.tokenizer.pad_token_id]*padding_length
+
+            pl = js['code']
+            pl_tokens = config.tokenizer.tokenize(pl)
+            pl_tokens = pl_tokens[:config.max_seq_length-2]
+            pl_tokens = [config.tokenizer.cls_token]+pl_tokens+[config.tokenizer.sep_token]
+            pl_ids = config.tokenizer.convert_tokens_to_ids(pl_tokens)
+            padding_length = config.max_seq_length - len(pl_ids)
+            pl_ids += [config.tokenizer.pad_token_id]*padding_length
+            label = js['label']
+            return datastruct.CasClassifierFeatures(pl_tokens,pl_ids,nl_tokens,nl_ids,label)
 
 
 # 专门用来训练SimpleCasClassifier的数据集,但是训练集全在一个文件中
@@ -179,6 +215,21 @@ class ClassifierDataset2(Dataset):
     
     def __len__(self):
         return len(self.data)
+    
+    def convert_examples_to_features(js,config):
+        nl = js['docstring']
+        nl_tokens = config.tokenizer.tokenize(nl)
+        pl = js['code']
+        pl_tokens = config.tokenizer.tokenize(pl)
+        input_tokens = [config.tokenizer.cls_token]+nl_tokens+[config.tokenizer.sep_token]
+        input_tokens += pl_tokens
+        input_tokens = input_tokens[:config.max_seq_length-1]
+        input_tokens +=[config.tokenizer.sep_token]
+        padding_length = config.max_seq_length - len(input_tokens)
+        input_tokens += [config.tokenizer.pad_token]*padding_length
+        input_ids = config.tokenizer.convert_tokens_to_ids(input_tokens)
+        label = js['label']
+        return datastruct.SimpleClassifierFeatures(input_tokens,input_ids,label)
 
 class TripletTrainData(Dataset):
     def __init__(self,config):

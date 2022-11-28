@@ -12,6 +12,7 @@ from model import CasEncoder
 import logging
 
 logging.getLogger().setLevel(logging.INFO)
+logging.basicConfig(filename="./model_saved/encoder3_tuned.log",level=logging.INFO)
 def train_encoder(train_dataloader,eval_dataloader,encoder,config):
   max_mrr = 0
   if not os.path.exists(config.saved_path):
