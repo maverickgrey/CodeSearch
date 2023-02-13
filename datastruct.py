@@ -28,8 +28,8 @@ class CasClassifierFeatures:
 # 运行整个流程，即进行代码搜索时使用的数据结构
 class CodeStruct(object):
   def __init__(self,code_vec,code_tokens,code,no):
-    self.code_tokens = code_tokens
     self.code_vec = code_vec
+    self.code_tokens = code_tokens
     self.code = code
     self.no = no
 

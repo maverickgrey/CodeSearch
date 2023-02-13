@@ -30,7 +30,7 @@ def run():
         classifier = classifier.cuda()
     # =========================================加载代码库===========================================
     logging.info("正在加载代码库")
-    codebase = load_codebase(config.test_path,config,encoder_pl)
+    codebase = load_codebase(config.test_path,config.code_vec_path,config)
 
     #=======================================测试模式===============================================
     if config.run_way == 'test':

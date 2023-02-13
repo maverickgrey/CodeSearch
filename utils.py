@@ -4,6 +4,7 @@ import math
 import numpy as np
 import json
 from datastruct import CodeBase,CodeStruct
+from model import CasEncoder
   
 def print_features(features):
   for f in features:
@@ -80,28 +81,48 @@ def get_info(result):
     print(res.code)
 
 # 将代码转换成向量并存入数据库中
-def load_codebase(data_path,config,encoder):
+# def load_codebase(data_path,config,encoder):
+#     code_base = []
+#     with open(data_path,'r') as d:
+#         code_no = 0 
+#         for line in d.readlines():
+#             js = json.loads(line)
+#             pl = ' '.join(js['code_tokens'])
+#             origin_pl = js['code']
+#             pl_tokens = config.tokenizer.tokenize(pl)
+#             origin_pl_tokens = pl_tokens
+#             pl_tokens = pl_tokens[:config.max_seq_length-2]
+#             pl_tokens = [config.tokenizer.cls_token] + pl_tokens +[config.tokenizer.sep_token]
+#             padding_length = config.max_seq_length-len(pl_tokens)
+#             pl_tokens += padding_length*[config.tokenizer.pad_token]
+#             pl_ids = torch.tensor([config.tokenizer.convert_tokens_to_ids(pl_tokens)])
+#             if config.use_cuda:
+#                 pl_ids = pl_ids.cuda()
+#             pl_vec = torch.reshape(encoder(pl_ids,None),(768,)).cpu().tolist()
+#             code_struct = CodeStruct(pl_vec,origin_pl_tokens,origin_pl,code_no)
+#             code_base.append(code_struct)
+#             code_no += 1
+#     return CodeBase(code_base)
+
+def load_codebase(code_path,vec_path,config)->CodeBase:
     code_base = []
-    with open(data_path,'r') as d:
-        code_no = 0 
-        for line in d.readlines():
-            js = json.loads(line)
-            pl = ' '.join(js['code_tokens'])
-            origin_pl = js['code']
-            pl_tokens = config.tokenizer.tokenize(pl)
-            origin_pl_tokens = pl_tokens
-            pl_tokens = pl_tokens[:config.max_seq_length-2]
-            pl_tokens = [config.tokenizer.cls_token] + pl_tokens +[config.tokenizer.sep_token]
-            padding_length = config.max_seq_length-len(pl_tokens)
-            pl_tokens += padding_length*[config.tokenizer.pad_token]
-            pl_ids = torch.tensor([config.tokenizer.convert_tokens_to_ids(pl_tokens)])
-            if config.use_cuda:
-                pl_ids = pl_ids.cuda()
-            pl_vec = torch.reshape(encoder(pl_ids,None),(768,)).cpu().tolist()
-            code_struct = CodeStruct(pl_vec,origin_pl_tokens,origin_pl,code_no)
-            code_base.append(code_struct)
-            code_no += 1
+    code_file = open(code_path,'r')
+    vec_file = open(vec_path,'r')
+    codes = code_file.readlines()
+    vecs = vec_file.readlines()
+    for vec in vecs:
+        vec_js = json.loads(vec)
+        code_no = vec_js['code_no']
+        code_vec = vec_js['code_vec']
+        code_js = json.loads(codes[code_no-1])
+        code = code_js['code']
+        code_tokens = ' '.join(code_js['code_tokens'])
+        code_tokens = config.tokenizer.tokenize(code_tokens)
+        code_struct = CodeStruct(code_vec,code_tokens,code,code_no)
+        code_base.append(code_struct)
     return CodeBase(code_base)
+
+
 
 # 将一条自然语言查询转换为向量，这个向量的维数为(1,768)，注意是二维的
 def query_to_vec(query,config,encoder):
@@ -115,3 +136,27 @@ def query_to_vec(query,config,encoder):
         query_ids = query_ids.cuda()
     query_vec = encoder(None,query_ids)
     return query_vec
+
+# 为某个文件中的代码段生成相应的向量表示，并且存储在jsonl文件中
+def code_to_vec(input_path,output_path,encoder,config):
+  with open(input_path,'r') as code_file:
+    code_no = 0
+    for line in code_file.readlines():
+      code_no += 1
+      js = json.loads(line)
+      pl = ' '.join(js['code_tokens'])
+      origin_pl = js['code']
+      pl_tokens = config.tokenizer.tokenize(pl)
+      origin_pl_tokens = pl_tokens
+      pl_tokens = pl_tokens[:config.max_seq_length-2]
+      pl_tokens = [config.tokenizer.cls_token] + pl_tokens +[config.tokenizer.sep_token]
+      padding_length = config.max_seq_length-len(pl_tokens)
+      pl_tokens += padding_length*[config.tokenizer.pad_token]
+      pl_ids = torch.tensor([config.tokenizer.convert_tokens_to_ids(pl_tokens)])
+      if config.use_cuda:
+          pl_ids = pl_ids.cuda()
+      pl_vec = torch.reshape(encoder(pl_ids,None),(768,)).cpu().tolist()
+      with open(output_path,'a') as vec_file:
+        vec = {"code_no":code_no,"code_vec":pl_vec}
+        vec_file.write(json.dumps(vec)+"\n")
+

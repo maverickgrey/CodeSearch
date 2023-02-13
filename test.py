@@ -1,7 +1,7 @@
 from config_class import Config
 from model import SimpleCasClassifier,CasEncoder
 from run import load_codebase,query_to_vec
-from utils import cos_similarity,get_priliminary,rerank,get_info
+from utils import cos_similarity,get_priliminary,rerank,get_info,code_to_vec
 
 def test2_func():
     config = Config()
@@ -24,5 +24,9 @@ def test2_func():
         final = rerank(query_tokens,_pre,classifier,config)
     get_info(final)
 
-    if __name__ == "__main__":
-        test2_func()
+if __name__ == "__main__":
+    input_path = "./CodeSearchNet/filtered_data/java_test_new.jsonl"
+    output_path = "./CodeSearchNet/code_vec/java_test_new_vec.jsonl"
+    encoder = CasEncoder('one')
+    config = Config()
+    code_to_vec(input_path,output_path,encoder,config)

@@ -1,16 +1,11 @@
 import json
 import random
 import os
-import re
-import string
 from config_class import Config
-from transformers import RobertaTokenizer
-from utils import convert_examples_to_features
 import torch
 import numpy as np
-from torch.utils.data import DataLoader,Dataset
-from dataset import CodeSearchDataset
-from model import CasEncoder
+from datafilter import DataFilterer
+
 
 """
 本文件对CodeSearchNet的源数据进行一定的处理：
@@ -28,7 +23,8 @@ class TrainData:
         self.func_name = func_name
         self.repo = repo
 
-class TargetData:
+# 负样本数据类，该类仅仅会在build_examples中被用到
+class ClassifierData:
     def __init__(self,label,code_tokens,nl_tokens,code,docstring) -> None:
         self.label = label
         self.code_tokens = code_tokens
@@ -36,93 +32,15 @@ class TargetData:
         self.code = code
         self.docstring = docstring
 
-class DataFilterer:
-    def __init__(self,data_path=None,data=None):
-        if data is None:
-            self.data_path = data_path
-            self.data = self.load_data(self.data_path)
-        else:
-            self.data = data
-        self.filter_table = ['()','=','/','{','}','(',')','*','-',',','[',']','#','"','\'','\\']
-
-    def filter(self,data):
-        result = []
-        for i in range(len(data)):
-            data[i].docstring = self.remove_html(data[i])
-            data[i].docstring = self.truncate(data[i])
-            if self.too_short(data[i]):
-                continue
-            elif self.has_chinese(data[i]):
-                continue
-            else:
-                data[i].docstring = self.has_java(data[i])
-                result.append(data[i])
-        return result
-
-    def load_data(self,data_path):
-        data = []
-        with open(data_path,'r') as f:
-            for line in f.readlines():
-                js = json.loads(line)
-                data.append(TrainData(js['code_tokens'],js['docstring_tokens'],js['code'],js['docstring'],js['func_name'],js['repo']))
-        return data
-    
-    # 一些过滤规则，True则应该过滤，False则不应该过滤
-    # 第一条过滤规则：nl_tokens长度过小的数据需要被过滤.注意，判断nl_tokens的长度是在去除标点符号后判断的
-    def too_short(self,example):
-        punc = string.punctuation
-        nl_tokens = example.docstring.split(' ')
-        length = 0
-        for token in nl_tokens:
-            if token not in punc:
-                length += 1
-        return True if length<=4 else False
-    
-    # 第二条过滤规则：将中文的NL过滤出去，因为它们在数据集中是以unicode的形式存储的，这在模型中无法提供有用的语义信息
-    def has_chinese(self,example):
-        nl = example.docstring
-        for str in nl:
-            if u'\u4e00' <= str <= u'\u9fff':
-                return True
-        return False
-    
-    # 第三条规则：只保留docstring的第一句话(以句号或者换行符作为句子结束标志),同时过滤一些黑名单中的符号
-    def truncate(self,example):
-        nl = ""
-        for char in example.docstring:
-            if (char != '.') and (char not in self.filter_table):
-                if char == '\n':
-                    nl += ' '
-                else:
-                    nl += char
-            elif (char != '.') and (char in self.filter_table):
-                continue
-            else:
-                break
-        return nl
-
-    
-    # 第四条规则：将javadoc符号拿走
-    def has_java(self,example):
-        nl_tokens = example.docstring.split(' ')
-        nl = ""
-        for token in nl_tokens:
-            if '@' not in token:
-                nl += token
-                nl += ' '
-        return nl.strip()
-    
-    #第五条规则：将html标签拿走
-    def remove_html(self,example):
-        nl = example.docstring
-        new_nl = re.sub("</?[\w]+ ?[\S]*>",'',nl)
-        return new_nl
-    
-    #将过滤后的数据写入到指定文件
-    def write_filtered_data(self,out_put):
-        filtered_data = self.filter(self.data)
-        write_to_file(filtered_data,out_put)
-
+# 将数据读取成TrainData
+def read_data(data_path):
+    res = []
+    with open(data_path,'r') as f:
+        for line in f.readlines():
+            js = json.loads(line)
+            example = TrainData(js['code_tokens'],js['docstring_tokens'],js['code'],js['docstring'],js['func_name'],js['repo'])
+            res.append(example)
+    return res
 
 # 用单文件数据构建classifier数据集
 def process_a_file(data_path,out_path,filter=False,shuffle=False):
@@ -147,7 +65,6 @@ def process_a_file(data_path,out_path,filter=False,shuffle=False):
             js['label'] = _data.label
             ft.write(json.dumps(js)+"\n")
 
-
 # 构建分类的正样本和负样本
 def build_examples(data,data_filter=True,shuffle=False):
     result = []
@@ -155,7 +72,7 @@ def build_examples(data,data_filter=True,shuffle=False):
     #构建两个样本，当当前data长度在2-4之间时
         for i in range(len(data)):
             scripts = [i]
-            sample = TargetData(1,data[i].code_tokens,data[i].nl_tokens,data[i].code,data[i].docstring)
+            sample = ClassifierData(1,data[i].code_tokens,data[i].nl_tokens,data[i].code,data[i].docstring)
             result.append(sample)
             k=0
             while k<1:
@@ -164,18 +81,18 @@ def build_examples(data,data_filter=True,shuffle=False):
                     r = random.randint(0,len(data)-1)
                 scripts.append(r)
                 if data[r].func_name == data[i].func_name:
-                    sample = TargetData(1,data[r].code_tokens,data[i].nl_tokens,data[r].code,data[i].docstring)
+                    sample = ClassifierData(1,data[r].code_tokens,data[i].nl_tokens,data[r].code,data[i].docstring)
                     result.append(sample)
                     k += 1
                 else:
-                    sample = TargetData(0,data[r].code_tokens,data[i].nl_tokens,data[r].code,data[i].docstring)
+                    sample = ClassifierData(0,data[r].code_tokens,data[i].nl_tokens,data[r].code,data[i].docstring)
                     result.append(sample)
                     k += 1
     elif len(data)>=4:
     #每条数据构建4个样本：当当前data长度大于等于4时(1p3n)
         for i in range(len(data)):
             scripts = [i]
-            sample = TargetData(1,data[i].code_tokens,data[i].nl_tokens,data[i].code,data[i].docstring)
+            sample = ClassifierData(1,data[i].code_tokens,data[i].nl_tokens,data[i].code,data[i].docstring)
             result.append(sample)
             k=0
             while k<3:
@@ -184,11 +101,11 @@ def build_examples(data,data_filter=True,shuffle=False):
                     r = random.randint(0,len(data)-1)
                 scripts.append(r)
                 if data[r].func_name == data[i].func_name:
-                    sample = TargetData(1,data[r].code_tokens,data[i].nl_tokens,data[r].code,data[i].docstring)
+                    sample = ClassifierData(1,data[r].code_tokens,data[i].nl_tokens,data[r].code,data[i].docstring)
                     result.append(sample)
                     k += 1
                 else:
-                    sample = TargetData(0,data[r].code_tokens,data[i].nl_tokens,data[r].code,data[i].docstring)
+                    sample = ClassifierData(0,data[r].code_tokens,data[i].nl_tokens,data[r].code,data[i].docstring)
                     result.append(sample)
                     k += 1
     if shuffle:
@@ -233,21 +150,6 @@ def stat_nltokens(data):
                 js['docstring_tokens'] = example.nl_tokens
                 f.write(json.dumps(js)+"\n")
     print(stat)
-
-def filter_encoder_data(data_path,out_path):
-    with open(data_path,'r') as f:
-        data_filter = DataFilterer(data_path)
-        result = data_filter.filter(data_filter.data)
-        with open(out_path,'w') as f:
-            for example in result:
-                js = {}
-                js['repo'] = example.repo
-                js['func_name'] = example.func_name
-                js['docstring'] = example.docstring
-                js['docstring_tokens'] = example.nl_tokens
-                js['code'] = example.code
-                js['code_tokens'] = example.code_tokens
-                f.write(json.dumps(js)+"\n")
 
 # 把所有的训练数据弄到一个文件里
 def converge():
@@ -365,15 +267,6 @@ def pipeline(data_path,encoder_out_path,classifier_out_path,filter = True):
     #构建classifier数据
     build_by_categorized(temp_file,classifier_out_path)
     os.remove(temp_file)
-
-def read_data(data_path):
-    res = []
-    with open(data_path,'r') as f:
-        for line in f.readlines():
-            js = json.loads(line)
-            example = TrainData(js['code_tokens'],js['docstring_tokens'],js['code'],js['docstring'],js['func_name'],js['repo'])
-            res.append(example)
-    return res
 
 # 对于每个数据的查询，输出相似度top5的序号
 def get_encoder_top_data(encoder,topK,dataloader,config,out_path):
