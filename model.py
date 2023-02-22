@@ -1,7 +1,7 @@
 from transformers import RobertaModel
 import torch
 import torch.nn as nn
-
+import time
 
 # CasCode的快速部分——编码器，这里使用了CodeBert预训练模型.
 # 共享参数，为自然语言查询和代码进行编码
@@ -63,10 +63,10 @@ class CasClassifier(nn.Module):
   def __init__(self):
     super(CasClassifier,self).__init__()
     self.encoder = CasEncoder('both')
-    # 通过fc1后，再经由tanh函数获得NL-PL的关系向量
+    # 通过fc1后，再经由tanh函数获得NL-PL的关系向量(relation embedding)
     self.fc1 = nn.Linear(4*768,768)
     # 关系向量通过fc2后，再经由sigmoid函数得到NL-PL对的相似分数
-    self.fc2 = nn.Linear(768,1)
+    self.fc2 = nn.Linear(768,2)
 
   def forward(self,pl_inputs,nl_inputs):
     code_vec,nl_vec = self.encoder(pl_inputs,nl_inputs)
@@ -80,3 +80,28 @@ class CasClassifier(nn.Module):
     out2 = self.fc2(out1)
     out = torch.sigmoid(out2)
     return out
+  
+
+# 将编码器和分类器用一个codebert模型表示
+class BiFuncModel(nn.Module):
+  def __init__(self):
+    super(BiFuncModel,self).__init__()
+    self.encoder = RobertaModel.from_pretrained("microsoft/codebert-base")
+    self.fc = nn.Linear(768,2)
+  
+  # 这个模型能够接收两个参数：
+  # encode_example：等待要编码的样本
+  # classify_example：等待要分类的样本
+  # 默认情况下它只对样本进行编码，但当有参数传递进classify_example时则不会编码，而是对其进行分类
+  def forward(self,encode_example,classify_example=None):
+    if classify_example != None:
+      begin_time = time.perf_counter()
+      vec = self.encoder(classify_example,attention_mask = classify_example.ne(1)).pooler_output
+      end_time = time.perf_counter()
+      print("vec generated in {}s".format(end_time-begin_time))
+      return self.fc(vec)
+    else:
+      if encode_example is not None:
+        return self.encoder(encode_example,attention_mask = encode_example.ne(1)).pooler_output
+      else:
+        raise("参数encode_example不能为空")

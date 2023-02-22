@@ -56,7 +56,7 @@ class CodeSearchDataset(Dataset):
                 for line in f.readlines():
                     num += 1
                     js = json.loads(line)
-                    example = self.convert_examples_to_features(js,num,self.config,type=0)
+                    example = self.convert_examples_to_features(js,num,self.config)
                     examples.append(example)
                     # if num>10:
                     #     break
@@ -68,7 +68,7 @@ class CodeSearchDataset(Dataset):
                 for line in f.readlines():
                     num += 1
                     js = json.loads(line)
-                    example = self.convert_examples_to_features(js,num,self.config,type=0)
+                    example = self.convert_examples_to_features(js,num,self.config)
                     examples.append(example)
             return examples
         else:
@@ -84,7 +84,7 @@ class CodeSearchDataset(Dataset):
                     #   break
             return examples
     
-    def convert_examples_to_features(js,no,config):
+    def convert_examples_to_features(self,js,no,config):
             nl = js['docstring']
             nl_tokens = config.tokenizer.tokenize(nl)
             nl_tokens = nl_tokens[:config.max_seq_length-2]
@@ -112,21 +112,27 @@ class ClassifierDataset(Dataset):
         examples = []
         if mode == 'eval':
             num = 0
-            eval_path = self.config.test_path
+            # eval_path = self.config.test_path
+            eval_path = "./CodeSearchNet/classifier/java_cvalid_new.jsonl"
             with open(eval_path,'r') as f:
                 for line in f.readlines():
                     js = json.loads(line)
-                    example = self.convert_examples_to_features(js,-1,self.config,2)
+                    example = self.convert_examples_to_features(js,self.config)
                     examples.append(example)
                     num += 1
                     # if num > 100:
                     #     break
             return examples
         elif mode == 'test':
-            pass
+            test_path = "./CodeSearchNet/classifier/java_cvalid_new.jsonl"
+            with open(test_path,'r') as f:
+                for line in f.readlines():
+                    js = json.loads(line)
+                    example = self.convert_examples_to_features(js,self.config)
+                    examples.append(example)
+            return examples
         else:
-            postfix = self.config.data_path+"/classifier/java_train_"
-            train_path = postfix + str(self.train_no)+".jsonl"
+            train_path = "./CodeSearchNet/classifier/java_classifier_0220.jsonl"
             with open(train_path,'r') as f:
                 for line in f.readlines():
                     js = json.loads(line)
@@ -143,7 +149,7 @@ class ClassifierDataset(Dataset):
     def __len__(self):
         return len(self.data)
     
-    def convert_examples_to_features(js,config):
+    def convert_examples_to_features(self,js,config):
             nl = js['docstring']
             nl_tokens = config.tokenizer.tokenize(nl)
             nl_tokens = nl_tokens[:config.max_seq_length-2]
@@ -178,7 +184,7 @@ class ClassifierDataset2(Dataset):
             with open(eval_path,'r') as f:
                 for line in f.readlines():
                     js = json.loads(line)
-                    example = self.convert_examples_to_features(js,-1,self.config,1)
+                    example = self.convert_examples_to_features(js,self.config)
                     examples.append(example)
                     num += 1
                     # if num > 100:
@@ -191,7 +197,7 @@ class ClassifierDataset2(Dataset):
             with open(eval_path,'r') as f:
                 for line in f.readlines():
                     js = json.loads(line)
-                    example = self.convert_examples_to_features(js,-1,self.config,1)
+                    example = self.convert_examples_to_features(js,self.config)
                     examples.append(example)
                     num += 1
                     # if num > 100:
@@ -203,7 +209,7 @@ class ClassifierDataset2(Dataset):
             with open(path,'r') as f:
                 for line in f.readlines():
                     js = json.loads(line)
-                    example = self.convert_examples_to_features(js,-1,self.config,1)
+                    example = self.convert_examples_to_features(js,self.config)
                     examples.append(example)
             return examples
 
@@ -215,7 +221,7 @@ class ClassifierDataset2(Dataset):
     def __len__(self):
         return len(self.data)
     
-    def convert_examples_to_features(js,config):
+    def convert_examples_to_features(self,js,config):
         nl = js['docstring']
         nl_tokens = config.tokenizer.tokenize(nl)
         pl = js['code']

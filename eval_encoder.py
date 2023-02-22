@@ -11,8 +11,8 @@ from utils import cos_similarity,get_priliminary
 
 
 def eval_encoder(dataloader,encoder,config,test = False,ret = False,during_train=False):
-  if os.path.exists(config.saved_path+"/encoder3.pt") and during_train==False:
-    encoder.load_state_dict(torch.load(config.saved_path+"/encoder3.pt"))
+  if os.path.exists(config.saved_path+"/encoder3_tuned.pt") and during_train==False:
+    encoder.load_state_dict(torch.load(config.saved_path+"/encoder3_tuned.pt"))
 
   loss_func = torch.nn.CrossEntropyLoss()
   total_loss = 0

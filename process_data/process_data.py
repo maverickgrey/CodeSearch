@@ -173,65 +173,6 @@ def converge():
                 f.write(json.dumps(read)+'\n')
     f.close()
     
-# 将训练集数据按照函数名分类，每个类别之间空一行
-def category_by_funcname(datapath,out_path):
-    out_file = open(out_path,'w')
-    current_name_prefix = None
-    with open(datapath,'r') as f:
-        line0 = f.readline()
-        js0 = json.loads(line0)
-        func_name0 = js0['func_name']
-        current_name_prefix = func_name0.split('.')[0]
-        out_file.write(line0)
-        for line in f.readlines():
-            js = json.loads(line)
-            func_name = js['func_name']
-            func_name = func_name.split('.')
-            name_prefix = func_name[0]
-            if name_prefix == current_name_prefix:
-                out_file.write(line)
-            else:
-                out_file.write("\n"+line)
-                current_name_prefix = name_prefix
-    out_file.close()
-
-# 用分类好的数据构建分类数据集
-def build_by_categorized(data_path,out_path):
-    out = open(out_path,'w')
-    result = []
-    with open(data_path,'r') as f:
-        data = []
-        unique_prefix_data = []
-        for line in f.readlines():
-            if line != "\n":
-                js = json.loads(line)
-                data.append(TrainData(js['code_tokens'],js['docstring_tokens'],js['code'],js['docstring'],js['func_name'],js['repo']))
-            else:
-                if len(data) == 1:
-                    unique_prefix_data.extend(data)
-                    data = []
-                else:
-                    result.extend(build_examples(data,shuffle=True))
-                    data=[]
-        result.extend(build_examples(unique_prefix_data,shuffle=True))
-    for r in result:
-        js = {}
-        js['docstring'] = r.docstring
-        js['docstring_tokens'] = r.nl_tokens
-        js['code'] = r.code
-        js['code_tokens'] = r.code_tokens
-        js['label'] = r.label
-        out.write(json.dumps(js)+"\n")
-    out.close()
-
-# 用func_name和repo来增强查询
-def strengthen_query(data):
-    for example in data:
-        nl_tokens = example.repo.split('/'[-1])
-        nl_tokens.extend(example.func_name.split('.'))
-        nl_tokens.extend(example.nl_tokens)
-        example.nl_tokens = nl_tokens
-
 def write_to_file(data,file,type='encoder'):
     with open(file,'w') as f:
         for example in data:
@@ -247,120 +188,6 @@ def write_to_file(data,file,type='encoder'):
                 js['label'] = example.label
             f.write(json.dumps(js)+"\n")
 
-# 处理数据的pipeline:读入一个原始数据文件，分别输出一个encoder的文件以及一个classifier的文件
-# 处理流程包括了查询增强、过滤数据、按照func_name分类、构建classifier数据、将数据写入到输出文件等
-def pipeline(data_path,encoder_out_path,classifier_out_path,filter = True):
-    # 读入数据
-    data = read_data(data_path)
-    #查询增强
-    #strengthen_query(data)
-
-    #过滤数据并写入文件
-    if filter == True:
-        df = DataFilterer(data_path=None,data=data)
-        data = df.filter(df.data)
-    write_to_file(data,encoder_out_path,'encoder')
-
-    #按照func_name分类
-    temp_file = "./CodeSearchNet/classifier/temp.jsonl"
-    category_by_funcname(encoder_out_path,temp_file)
-    #构建classifier数据
-    build_by_categorized(temp_file,classifier_out_path)
-    os.remove(temp_file)
-
-# 对于每个数据的查询，输出相似度top5的序号
-def get_encoder_top_data(encoder,topK,dataloader,config,out_path):
-    # code_vecs = []
-    # nl_vecs = []
-    if os.path.exists(config.saved_path+"/encoder3.pt"):
-        encoder.load_state_dict(torch.load(config.saved_path+"/encoder3.pt"))
-    if config.use_cuda:
-        encoder = encoder.cuda()
-    example_no = 0
-    offset = 0
-    for step,example in enumerate(dataloader):
-        code_vecs = []
-        nl_vecs = []
-        pl_ids = example[0]
-        nl_ids = example[1]
-        if config.use_cuda:
-            pl_ids = pl_ids.cuda()
-            nl_ids = nl_ids.cuda()
-        with torch.no_grad():
-            code_vec,nl_vec = encoder(pl_ids,nl_ids)
-            code_vecs.append(code_vec.cpu().numpy())
-            nl_vecs.append(nl_vec.cpu().numpy())
-        if step %500 == 0:
-            print("step:{}".format(step))
-        code_vecs = np.concatenate(code_vecs,0)
-        nl_vecs = np.concatenate(nl_vecs,0)
-        scores = np.matmul(nl_vecs,code_vecs.T)
-        for score in scores:
-            script = np.argsort(-score,axis=-1,kind='quicksort')
-            temp = []
-            res = {}
-            with open(out_path,'a') as f:
-                for i in range(min(len(scores),topK)):
-                    index = int(script[i])+offset
-                    temp.append(index)
-                res['example_no'] = example_no
-                res['topK'] = temp
-                f.write(json.dumps(res)+"\n")
-            example_no+=1
-        offset += config.eval_batch_size
-
-#   根据encoder的top数据生成分类器数据,同时需要的话还能得到triplet数据
-def generate_cls_data(encoder_data,source_data,output_path,get_triplet=False):
-    data = []
-    with open(source_data,'r') as fd:
-        data = fd.readlines()
-    with open(encoder_data,'r') as fe:
-        for line in fe.readlines():
-            e_data = json.loads(line)
-            number = e_data['example_no']
-            res_list = e_data['topK']
-            #构建正样本：
-            positive = {}
-            p_data = json.loads(data[number])
-            positive['code'] = p_data['code']
-            positive['code_tokens'] = p_data['code_tokens']
-            positive['docstring'] = p_data['docstring']
-            positive['docstring_tokens'] = p_data['docstring_tokens']
-            positive['label'] = 1
-            #构建负样本：
-            negative = {}
-            if res_list[0]!=number:
-                n_data = json.loads(data[res_list[0]])
-                negative['code'] = n_data['code']
-                negative['code_tokens'] = n_data['code_tokens']
-                negative['docstring'] = p_data['docstring']
-                negative['docstring_tokens'] = p_data['docstring_tokens']
-                negative['label'] = 0
-            else:
-                rand = random.randint(0,4)
-                while res_list[rand]==number:
-                    rand = random.randint(0,4)
-                n_data = json.loads(data[res_list[rand]])
-                negative['code'] = n_data['code']
-                negative['code_tokens'] = n_data['code_tokens']
-                negative['docstring'] = p_data['docstring']
-                negative['docstring_tokens'] = p_data['docstring_tokens']
-                negative['label'] = 0
-            if get_triplet:
-                triplet_data = {}
-                triplet_data['anchor'] = positive['docstring']
-                triplet_data['positive'] = positive['code']
-                triplet_data['negative'] = negative['code']
-                with open(config.data_path+"/filtered_data/java_encoder_triplet.jsonl",'a') as ft:
-                    ft.write(json.dumps(triplet_data)+"\n")
-            with open(output_path,'a') as out:
-                out.write(json.dumps(positive)+"\n")
-                out.write(json.dumps(negative)+"\n")
-
-
-
-
-
 if __name__ == "__main__":
     # train_path = "./CodeSearchNet/classifier/java_train_cl.jsonl"
     # out_path = "./CodeSearchNet/classifier/java_train_c.jsonl"
@@ -375,5 +202,5 @@ if __name__ == "__main__":
     # dataloader = DataLoader(dataset,config.eval_batch_size,collate_fn=dataset.collate_fn)
     # encoder = CasEncoder()
     # get_encoder_top_data(encoder,5,dataloader,config,config.data_path+"/classifier/encoder_top.jsonl")
-    generate_cls_data(config.data_path+"/classifier/encoder_top.jsonl",config.data_path+"/filtered_data/java_train_new.jsonl",config.data_path+"/classifier/java_train_classifier_p1n1_1124.jsonl",get_triplet=True)
+    #generate_cls_data(config.data_path+"/classifier/encoder_top.jsonl",config.data_path+"/filtered_data/java_train_new.jsonl",config.data_path+"/classifier/java_train_classifier_p1n1_1124.jsonl",get_triplet=True)
 

@@ -4,15 +4,13 @@ from transformers import get_linear_schedule_with_warmup
 import torch
 import torch.nn as nn
 import os
-from utils import cos_similarity
 from eval_encoder import eval_encoder
-from dataset import CodeSearchDataset,TripletTrainData
-from torch.utils.data import DataLoader,RandomSampler
-from model import CasEncoder
 import logging
+from log_util import LogUtil
 
-logging.getLogger().setLevel(logging.INFO)
-logging.basicConfig(filename="./model_saved/encoder3_tuned.log",level=logging.INFO)
+
+log = LogUtil()
+logger = log.get_logger()
 def train_encoder(train_dataloader,eval_dataloader,encoder,config):
   max_mrr = 0
   if not os.path.exists(config.saved_path):
@@ -75,23 +73,19 @@ def train_encoder(train_dataloader,eval_dataloader,encoder,config):
       scheduler.step()
  
       if step%100 == 0:
-        print("epoch:{},step:{},avg_loss:{},current_loss:{}".format(epoch+1,step,total_loss/tr_num,current_loss))
-        with open(config.saved_path+"/encoder_log4.txt",'a') as lg:
-          lg.write("epoch:{},step:{},avg_loss:{},current_loss:{}".format(epoch+1,step,total_loss/tr_num,current_loss)+"\n")
+        logger.info("epoch:{},step:{},avg_loss:{},current_loss:{}".format(epoch+1,step,total_loss/tr_num,current_loss))
       if step%15000 == 0:
         avg_loss,mrr,ans_k = eval_encoder(eval_dataloader,encoder=encoder,config=config,test=False,ret=True,during_train=True)
-        with open(config.saved_path+"/encoder_log4.txt",'a') as lg:
-          lg.write("max_mrr:{},current_mrr:{},ans_k:{}".format(max_mrr,mrr,ans_k))
+        logger.info("max_mrr:{},current_mrr:{},ans_k:{}".format(max_mrr,mrr,ans_k))
         if mrr>max_mrr:
           max_mrr = mrr
           torch.save(encoder.state_dict(),config.saved_path+"/encoder3.pt")
           torch.save(optimizer.state_dict(),config.saved_path+"/e_optimizer3.pt")
           torch.save(scheduler.state_dict(),config.saved_path+"/e_scheduler3.pt")
-        with open(config.saved_path+"/encoder_log4.txt",'a') as lg:
-          lg.write("evaluation---avg_loss:{},mrr:{},ans_k:{}".format(avg_loss,mrr,ans_k)+"\n")
+          logger.info("evaluation---avg_loss:{},mrr:{},ans_k:{}".format(avg_loss,mrr,ans_k)+"\n")
 
 # 使用triplet loss来对训练好的encoder进行调整，使用的数据为利用encoder生成的classifier数据，以query为anchor，正样本代码段为positive，负样本代码段为negative
-def tune_encoder(encoder,train_dataloader,eval_dataloader,config):
+def triplet_train_encoder(encoder,train_dataloader,eval_dataloader,config):
   loss_func = nn.TripletMarginLoss(margin=0.6)
   optimizer = torch.optim.AdamW(encoder.parameters(),1e-5)
   total_loss = 0
@@ -100,14 +94,14 @@ def tune_encoder(encoder,train_dataloader,eval_dataloader,config):
     encoder = encoder.cuda()
 
   if os.path.exists(config.saved_path+"/encoder3_tuned.pt"):
-    logging.info("loading tuned model...")
+    logger.info("loading tuned model...")
     encoder.load_state_dict(torch.load(config.saved_path+"/encoder3_tuned.pt"))
   elif os.path.exists(config.saved_path+"/encoder3.pt"):
-    logging.info("loading model...")
+    logger.info("loading model...")
     encoder.load_state_dict(torch.load(config.saved_path+"/encoder3.pt"))
 
   if os.path.exists(config.saved_path+"/e_optimizer3_tuned.pt"):
-    logging.info("loading optimizer...")
+    logger.info("loading optimizer...")
     optimizer.load_state_dict(torch.load(config.saved_path+"/e_optimizer3.pt"))
 
   for epoch in range(2):
@@ -130,7 +124,7 @@ def tune_encoder(encoder,train_dataloader,eval_dataloader,config):
       optimizer.step()
       optimizer.zero_grad()
       if step%500 == 0:
-        logging.info("epoch:{},step:{},current_loss:{}".format(epoch+1,step,current_loss))
+        logger.info("epoch:{},step:{},current_loss:{}".format(epoch+1,step,current_loss))
     torch.save(encoder.state_dict(),config.saved_path+"/encoder3_tuned.pt")
     torch.save(optimizer.state_dict(),config.saved_path+"/e_optimizer3_tuned.pt")
 
@@ -149,4 +143,4 @@ if __name__ == '__main__':
   # tune_dataset = TripletTrainData(config)
   # tune_dataloader = DataLoader(tune_dataset,config.train_batch_size)
   # encoder = CasEncoder('one')
-  # tune_encoder(encoder,tune_dataloader,None,config)
+  # triplet_train_encoder(encoder,tune_dataloader,None,config)

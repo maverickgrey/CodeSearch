@@ -5,9 +5,13 @@ import torch.nn as nn
 from dataset import ClassifierDataset,ClassifierDataset2
 from transformers import RobertaConfig,get_linear_schedule_with_warmup
 from torch.utils.data import DataLoader
-from model import SimpleCasClassifier
+from model import SimpleCasClassifier,CasClassifier
 from eval_classifier import eval_classifier,eval_classifier2
+from log_util import LogUtil
 
+
+log = LogUtil()
+logger = log.get_logger()
 # 训练简单分类器
 def train_classifier(dataloader,eval_dataloader,classifier,config):
     max_acc = 0
@@ -49,19 +53,11 @@ def train_classifier(dataloader,eval_dataloader,classifier,config):
             scheduler.step()
             total_step += 1
             if step%500 == 0:
-                log_file = open('./model_saved/log_epoch1.txt','a')
-                log = "epoch:{},step:{},avg_loss:{}".format(epoch+1,step,total_loss/total_step)
-                print(log)
-                log_file.write(log+"\n")
-                log_file.close()
+                logger.info("epoch:{},step:{},avg_loss:{}".format(epoch+1,step,total_loss/total_step))
             if step%35000 == 0:
-                log_file = open('./model_saved/log_epoch1.txt','a')
-                log = "开始evaluation..."
-                print(log)
-                log_file.write(log+"\n")
+                logger.info("开始evaluation")
                 avg_loss,acc = eval_classifier(eval_dataloader,classifier,config,train=True,ret=True)
-                log_file.write("evaluation: avg_{},acc:{},max_acc:{}".format(avg_loss,acc,max_acc))
-                log_file.close()
+                logger.info("evaluation: avg_{},acc:{},max_acc:{}".format(avg_loss,acc,max_acc))
                 if acc>max_acc:
                     max_acc = acc
                     torch.save(classifier.state_dict(),config.saved_path+"/classifier2.pt")
@@ -69,7 +65,7 @@ def train_classifier(dataloader,eval_dataloader,classifier,config):
                     torch.save(scheduler.state_dict(),config.saved_path+"/c_scheduler2.pt")
 
 # 训练原版分类器
-def train_classifier2(dataloader,classifier,config):
+def train_classifier2(dataloader,eval_dataloader,classifier,config):
     if not os.path.exists(config.saved_path):
         os.makedirs(config.saved_path)
 
@@ -77,10 +73,10 @@ def train_classifier2(dataloader,classifier,config):
     loss_func = nn.CrossEntropyLoss()
     optimizer = torch.optim.AdamW(classifier.parameters(),lr=4e-6)
 
-    if os.path.exists(config.saved_path+"/classifier2.pt"):
-        classifier.load_state_dict(torch.load(config.saved_path+"/classifier2.pt"))
-    if os.path.exists(config.saved_path+"/c_optimizer2.pt"):
-        optimizer.load_state_dict(torch.load(config.saved_path+"/c_optimizer2.pt"))
+    if os.path.exists(config.saved_path+"/classifier_220.pt"):
+        classifier.load_state_dict(torch.load(config.saved_path+"/classifier_220.pt"))
+    if os.path.exists(config.saved_path+"/c_optimizer_220.pt"):
+        optimizer.load_state_dict(torch.load(config.saved_path+"/c_optimizer_220.pt"))
     if config.use_cuda:
         classifier = classifier.cuda()
 
@@ -97,6 +93,8 @@ def train_classifier2(dataloader,classifier,config):
                 nl_ids = nl_ids.cuda()
                 label = label.cuda()
             logit = classifier(pl_ids,nl_ids)
+            print("label:",label)
+            print("logit:",logit)
             loss = loss_func(logit,label)
             total_loss += loss.item()
             loss.backward()
@@ -104,30 +102,22 @@ def train_classifier2(dataloader,classifier,config):
             optimizer.zero_grad()
             total_step += 1
             if step%500 == 0:
-                log_file = open('./model_saved/log_classifier.txt','a')
-                log = "epoch:{},step:{},avg_loss:{}".format(epoch+1,step,total_loss/total_step)
-                print(log)
-                log_file.write(log+"\n")
-                log_file.close()
+                logger.info("epoch:{},step:{},avg_loss:{}".format(epoch+1,step,total_loss/total_step))
             if step%35000 == 0:
-                log_file = open('./model_saved/log_classifier.txt','a')
-                log = "开始evaluation..."
-                print(log)
-                log_file.write(log+"\n")
-                avg_loss,acc = eval_classifier2(eval_dataloader,classifier,config,train=True,ret=True)
-                log_file.write("evaluation: avg_{},acc:{},max_acc:{}".format(avg_loss,acc,max_acc))
-                log_file.close()
-                if acc>max_acc:
-                    max_acc = acc
-                    torch.save(classifier.state_dict(),config.saved_path+"/classifier2.pt")
-                    torch.save(optimizer.state_dict(),config.saved_path+"/c_optimizer2.pt")
+                # logger.info("开始evaluation...")
+                # avg_loss,acc = eval_classifier2(eval_dataloader,classifier,config,train=True,ret=True)
+                # logger.info("evaluation: avg_{},acc:{},max_acc:{}".format(avg_loss,acc,max_acc))
+                # if acc>max_acc:
+                #     max_acc = acc
+                torch.save(classifier.state_dict(),config.saved_path+"/classifier_222.pt")
+                torch.save(optimizer.state_dict(),config.saved_path+"/c_optimizer_222.pt")
 
 
 if __name__ == "__main__":
     config = Config()
-    classifier = SimpleCasClassifier()
-    train_dataset = ClassifierDataset2(config,'train')
+    classifier = CasClassifier()
+    train_dataset = ClassifierDataset(config,'train')
     train_dataloader = DataLoader(train_dataset,config.train_batch_size)
-    eval_dataset = ClassifierDataset2(config,'eval')
+    eval_dataset = ClassifierDataset(config,'eval')
     eval_dataloader = DataLoader(eval_dataset,config.eval_batch_size)
-    train_classifier(train_dataloader,eval_dataloader,classifier,config)
+    train_classifier2(train_dataloader,eval_dataloader,classifier,config)

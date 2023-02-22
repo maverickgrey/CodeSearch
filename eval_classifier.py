@@ -7,8 +7,8 @@ import torch.nn as nn
 import os
 
 def eval_classifier(dataloader,classifier,config,train=False,ret=False):
-    if os.path.exists(config.saved_path+"/classifier3.pt") and train==False:
-        classifier.load_state_dict(torch.load(config.saved_path+"/classifier3.pt"))
+    if os.path.exists(config.saved_path+"/classifier2.pt") and train==False:
+        classifier.load_state_dict(torch.load(config.saved_path+"/classifier2.pt"))
     classifier.zero_grad()
     total_loss = 0
     total_step = 0
@@ -60,7 +60,7 @@ def eval_classifier2(dataloader,classifier,config,train=False,ret=False):
     for step,example in enumerate(dataloader):
         pl_ids = example[0]
         nl_ids = example[1]
-        label = example[1]
+        label = example[2]
         if config.use_cuda:
             pl_ids = pl_ids.cuda()
             nl_ids = nl_ids.cuda()
@@ -102,5 +102,4 @@ if __name__ == "__main__":
     classifier = SimpleCasClassifier()
     if config.use_cuda:
         classifier = classifier.cuda()
-    avg_loss,acc = eval_classifier(dataloader,classifier,config,False,True)
-    print(avg_loss,acc)
+    eval_classifier(dataloader,classifier,config,False,False)
