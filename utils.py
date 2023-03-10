@@ -6,6 +6,7 @@ import json
 from datastruct import CodeBase,CodeStruct
 from model import CasEncoder
 import time
+from functools import wraps
   
 def print_features(features):
   for f in features:
@@ -53,49 +54,53 @@ def get_priliminary(score,codebase,config):
 
 # 在用快速编码器得到初步的结果之后，用慢速分类器对初步的结果进行re-rank
 def rerank(query_tokens,pre_results,classifier,config):
-  final = []
-  re_scores = np.array([])
-  #pre_results会拿到经过encoder的一个初步结果，pre_results是一个列表，每个元素是一个用来表示每条代码段的数据结构（CodeStruct）
-  #接下来是用查询的query_tokens和每个pre_result拼在一起送入分类器，判断它们相匹配的概率，并把概率存到re_scores中
-  tokenize_time = 0
-  model_time = 0
-  for pr in pre_results:
-    tokenize_begin_time = time.perf_counter()
-    code_tokens = pr.code_tokens
-    input_tokens = [config.tokenizer.cls_token]+query_tokens+[config.tokenizer.sep_token]
-    input_tokens += code_tokens
-    input_tokens = input_tokens[:config.max_seq_length-1]
-    input_tokens += [config.tokenizer.sep_token]
-    padding_length = config.max_seq_length - len(input_tokens)
-    input_tokens += padding_length*[config.tokenizer.pad_token]
-    input_ids = torch.tensor([config.tokenizer.convert_tokens_to_ids(input_tokens)])
-    tokenize_end_time = time.perf_counter()
-    tokenize_time += (tokenize_end_time-tokenize_begin_time)
-    if config.use_cuda:
-      input_ids = input_ids.cuda()
+    final = []
+    re_scores = np.array([])
+    #pre_results会拿到经过encoder的一个初步结果，pre_results是一个列表，每个元素是一个用来表示每条代码段的数据结构（CodeStruct）
+    #接下来是用查询的query_tokens和每个pre_result拼在一起送入分类器，判断它们相匹配的概率，并把概率存到re_scores中
+    model_time = 0
+    input_batch = []
+    max_len = 0
+    for pr in pre_results:
+      code_tokens = pr.code_tokens
+      input_tokens = [config.tokenizer.cls_token]+query_tokens+[config.tokenizer.sep_token]
+      input_tokens += code_tokens
+      input_tokens = input_tokens[:config.max_seq_length-1]
+      input_tokens += [config.tokenizer.sep_token]
+      input_batch.append(input_tokens)
+
+    for _input in input_batch: 
+      if len(_input) > max_len:
+        max_len = len(_input)
+
+    for i in range(len(input_batch)):
+      padding_length = max_len - len(input_batch[i])
+      input_batch[i] += padding_length*[config.tokenizer.pad_token]
+      input_batch[i] = config.tokenizer.convert_tokens_to_ids(input_batch[i])
+
+      
+    input_batch = torch.tensor(input_batch,device=config.device)
     model_begin_time = time.perf_counter()
-    logit = classifier(input_ids)
+    logit = classifier(input_batch)
     model_end_time = time.perf_counter()
     model_time += (model_end_time-model_begin_time)
-    probs = torch.reshape(torch.softmax(logit,dim=-1).cpu().detach(),(2,))
-    re_scores = np.append(re_scores,probs[1].item())
-  # print("本次tokenizer time:{}".format(tokenize_time))
-  # print("本次model time:{}".format(model_time))
-  #print("预处理结果中与查询匹配的概率：",re_scores)
-  sort_time_begin = time.perf_counter()
-  script = np.argsort(-re_scores,-1,'quicksort',None)
-  sort_time_end = time.perf_counter()
-  # print("本次sort time:{}".format(sort_time_end-sort_time_begin))
-  #print("预处理结果中按概率降序的下标:",script)
-  for i in script:
-    if len(final)<config.final_K:
-      final.append(pre_results[i])
-  return final
+    #probs计算耗时大约为0.0001秒左右
+    probs = torch.reshape(torch.softmax(logit,dim=-1).cpu().detach(),(config.filter_K,2)).numpy()
+    
+    re_scores = probs[:,1]
+    print("本次model time:{}".format(model_time))
+    #print("预处理结果中与查询匹配的概率：",re_scores)
+    script = np.argsort(-re_scores,-1,'quicksort',None)
+    #print("预处理结果中按概率降序的下标:",script)
+    for i in script:
+      if len(final)<config.final_K:
+        final.append(pre_results[i].code)
+    #get_info(final)
 
 # 读取从codebase里获取的结果数组的信息
 def get_info(result):
   for res in result:
-    print(res.code)
+    print(res)
 
 # 将代码转换成向量并存入数据库中(旧版本)
 def load_codebase_old(data_path,config,encoder):
@@ -113,8 +118,9 @@ def load_codebase_old(data_path,config,encoder):
             padding_length = config.max_seq_length-len(pl_tokens)
             pl_tokens += padding_length*[config.tokenizer.pad_token]
             pl_ids = torch.tensor([config.tokenizer.convert_tokens_to_ids(pl_tokens)])
-            if config.use_cuda:
-                pl_ids = pl_ids.cuda()
+            # if config.use_cuda:
+            #     pl_ids = pl_ids.cuda()
+            pl_ids = pl_ids.to(config.devices)
             pl_vec = torch.reshape(encoder(pl_ids,None),(768,)).cpu().tolist()
             code_struct = CodeStruct(pl_vec,origin_pl_tokens,origin_pl,code_no)
             code_base.append(code_struct)
@@ -149,8 +155,30 @@ def query_to_vec(query,config,encoder):
     padding_length = config.max_seq_length - len(query_tokens)
     query_tokens += padding_length*[config.tokenizer.pad_token]
     query_ids = torch.tensor([config.tokenizer.convert_tokens_to_ids(query_tokens)])
-    if config.use_cuda:
-        query_ids = query_ids.cuda()
+    # if config.use_cuda:
+    #     query_ids = query_ids.cuda()
+    query_ids = query_ids.to(config.device)
     query_vec = encoder(None,query_ids)
     return query_vec
 
+# 求两个矩阵的海明距离
+def matrix_hamming(mat_a,mat_b):
+   pass
+
+# 自定义函数实现
+def vec_hamming(vec1, vec2):
+    """返回等长序列之间的汉明距离"""
+    if len(vec1) != len(vec2):
+        raise ValueError("两向量长度不等，无法计算hamming距离！")
+    return sum(el1 != el2 for el1, el2 in zip(vec1, vec2))
+
+# 统计函数耗时
+def timer(func):
+   @wraps(func)
+   def wrapper(*args,**kwargs):
+      begin = time.perf_counter()
+      result = func(*args,**kwargs)
+      end = time.perf_counter()
+      print("{} cost {} seconds.".format(func.__name__,end-begin))
+      return result
+   return wrapper

@@ -4,7 +4,7 @@ import copy
 import json
 
 """
-K-means算法，在hash的offline stage时为每个向量进行无监督分类
+K-means算法,在hash的offline stage时为每个向量进行无监督分类
 """
 
 class KMeans():

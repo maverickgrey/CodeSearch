@@ -40,8 +40,8 @@ class CodeSearchDataset(Dataset):
             pl_ids += pl_padding_length*[self.config.tokenizer.pad_token_id]
             pl_res.append(pl_ids)
             nl_res.append(nl_ids)
-        result.append(torch.LongTensor(pl_res))
-        result.append(torch.LongTensor(nl_res))
+        result.append(torch.LongTensor(pl_res,device=config.device))
+        result.append(torch.LongTensor(nl_res,device=config.device))
         return result
 
             
@@ -141,10 +141,11 @@ class ClassifierDataset(Dataset):
             return examples
 
     def __getitem__(self, index):
+        inputs_ids = self.data[index].inputs_ids
         pl_ids = self.data[index].pl_ids
         nl_ids = self.data[index].nl_ids
         label = self.data[index].label
-        return (torch.tensor(pl_ids),torch.tensor(nl_ids),torch.tensor(label))
+        return (torch.tensor(inputs_ids,device=self.config.device),torch.tensor(pl_ids,device=self.config.device),torch.tensor(nl_ids,device=self.config.device),torch.tensor(label,device=self.config.device))
     
     def __len__(self):
         return len(self.data)
@@ -154,6 +155,7 @@ class ClassifierDataset(Dataset):
             nl_tokens = config.tokenizer.tokenize(nl)
             nl_tokens = nl_tokens[:config.max_seq_length-2]
             nl_tokens = [config.tokenizer.cls_token]+nl_tokens+[config.tokenizer.sep_token]
+            inputs = nl_tokens
             nl_ids = config.tokenizer.convert_tokens_to_ids(nl_tokens)
             padding_length = config.max_seq_length - len(nl_ids)
             nl_ids += [config.tokenizer.pad_token_id]*padding_length
@@ -161,12 +163,19 @@ class ClassifierDataset(Dataset):
             pl = js['code']
             pl_tokens = config.tokenizer.tokenize(pl)
             pl_tokens = pl_tokens[:config.max_seq_length-2]
+            inputs += pl_tokens
             pl_tokens = [config.tokenizer.cls_token]+pl_tokens+[config.tokenizer.sep_token]
             pl_ids = config.tokenizer.convert_tokens_to_ids(pl_tokens)
             padding_length = config.max_seq_length - len(pl_ids)
             pl_ids += [config.tokenizer.pad_token_id]*padding_length
+
+            inputs = inputs[:config.max_seq_length-1]
+            inputs += [config.tokenizer.sep_token]
+            padding_length = config.max_seq_length - len(inputs)
+            inputs += [config.tokenizer.pad_token]*padding_length
+            inputs_ids = config.tokenizer.convert_tokens_to_ids(inputs)
             label = js['label']
-            return datastruct.CasClassifierFeatures(pl_tokens,pl_ids,nl_tokens,nl_ids,label)
+            return datastruct.CasClassifierFeatures(inputs_ids,pl_tokens,pl_ids,nl_tokens,nl_ids,label)
 
 
 # 专门用来训练SimpleCasClassifier的数据集,但是训练集全在一个文件中
@@ -216,7 +225,7 @@ class ClassifierDataset2(Dataset):
     def __getitem__(self, index):
         input_ids = self.data[index].token_ids
         label = self.data[index].label
-        return (torch.tensor(input_ids),torch.tensor(label))
+        return (torch.tensor(input_ids,device=config.device),torch.tensor(label,device=config.device))
     
     def __len__(self):
         return len(self.data)
@@ -286,7 +295,7 @@ class TripletTrainData(Dataset):
         anchor = _data['anchor']
         positive = _data['positive']
         negative = _data['negative']
-        return (torch.tensor(anchor),torch.tensor(positive),torch.tensor(negative))
+        return (torch.tensor(anchor,device=config.device),torch.tensor(positive,device=config.device),torch.tensor(negative,device=config.device))
     
     def __len__(self):
         return len(self.data)

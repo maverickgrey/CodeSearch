@@ -18,8 +18,9 @@ def eval_encoder(dataloader,encoder,config,test = False,ret = False,during_train
   total_loss = 0
   num_step = 0
 
-  if config.use_cuda:
-    encoder = encoder.cuda()
+  # if config.use_cuda:
+  #   encoder = encoder.cuda()
+  encoder = encoder.to(config.device)
 
   encoder.eval()
   code_vecs = []
@@ -29,17 +30,17 @@ def eval_encoder(dataloader,encoder,config,test = False,ret = False,during_train
     pl_ids = example[0]
     nl_ids = example[1]
 
-    if config.use_cuda:
-      pl_ids = pl_ids.cuda()
-      nl_ids = nl_ids.cuda()
+    # if config.use_cuda:
+    #   pl_ids = pl_ids.cuda()
+    #   nl_ids = nl_ids.cuda()
 
     with torch.no_grad():
       code_vec,nl_vec = encoder(pl_ids,nl_ids)
       # scores = cos_similarity(nl_vec,code_vec)
       score=(nl_vec[:,None,:]*code_vec[None,:,:]).sum(-1)
-      labels = torch.arange(code_vec.shape[0])
-      if config.use_cuda:
-        labels = labels.cuda()
+      labels = torch.arange(code_vec.shape[0],device=config.device)
+      # if config.use_cuda:
+      #   labels = labels.cuda()
       loss = loss_func(score,labels)
       total_loss += loss.item()
       num_step += 1

@@ -2,16 +2,20 @@ from transformers import RobertaModel
 import torch
 import torch.nn as nn
 import os
+from config_class import Config
+from pathlib import Path
+from model import CasEncoder
 
 
+config = Config()
 # 代码搜索模块的哈希模型
 class HashEncoder(nn.Module):
   def __init__(self,encode='all'):
     super(HashEncoder,self).__init__()
     self.encode = encode
-    self.encoder = RobertaModel.from_pretrained("microsoft/codebert-base")
-    if os.path.exists("../model_saved/encoder3.pt"):
-       self.encoder.load_state_dict(torch.load("../model_saved/encoder3.pt"))
+    self.encoder = CasEncoder('one')
+    if os.path.exists(str(Path(config.saved_path,"encoder3.pt"))):
+       self.encoder.load_state_dict(torch.load(str(Path(config.saved_path,"encoder3.pt"))))
     self.hash = HashModule()
   
   def forward(self,inputs):
@@ -19,7 +23,7 @@ class HashEncoder(nn.Module):
         hash_vec = self.hash(inputs)
         return hash_vec
     elif self.encode == 'all':
-        vec = self.encoder(inputs,attention_mask=inputs.ne(1)).pooler_output
+        vec = self.encoder(inputs,None)
         hash_vec = self.hash(vec)
         return vec,hash_vec
 
@@ -60,10 +64,16 @@ class DeepHashLoss(nn.Module):
        T_3 = self.lambda2*(torch.norm(S_F - (torch.matmul(B_D,B_D.T)/d),"fro")**2)
        return T_1+T_2+T_3
 
-
-
-
-
-
-
-       
+class CategoryPred(nn.Module):
+    def __init__(self,cluster) -> None:
+      super(CategoryPred,self).__init__()
+      self.cluster = cluster
+      self.encoder = RobertaModel.from_pretrained("microsoft/codebert-base")
+      if os.path.exists(str(Path(config.saved_path,"encoder3.pt"))):
+         self.encoder.load_state_dict(torch.load(str(Path(config.saved_path,"encoder3.pt"))))
+      self.fc = nn.Linear(768,self.cluster)
+    
+    def forward(self,inputs):
+       inputs_vec = self.encoder(inputs,attention_mask=inputs.ne(1)).pooler_output
+       out = self.fc(inputs_vec)
+       return out

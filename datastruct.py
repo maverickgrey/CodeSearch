@@ -18,7 +18,8 @@ class SimpleClassifierFeatures(object):
 
 #
 class CasClassifierFeatures:
-  def __init__(self,pl_tokens,pl_ids,nl_tokens,nl_ids,label):
+  def __init__(self,inputs_ids,pl_tokens,pl_ids,nl_tokens,nl_ids,label):
+    self.inputs_ids = inputs_ids
     self.pl_tokens = pl_tokens
     self.pl_ids = pl_ids
     self.nl_tokens = nl_tokens

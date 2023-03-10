@@ -20,9 +20,9 @@ def eval_classifier(dataloader,classifier,config,train=False,ret=False):
     for step,example in enumerate(dataloader):
         inputs = example[0]
         label = example[1]
-        if config.use_cuda:
-            inputs = inputs.cuda()
-            label = label.cuda()
+        # if config.use_cuda:
+        #     inputs = inputs.cuda()
+        #     label = label.cuda()
         logits = classifier(inputs)
         pred = torch.argmax(logits,dim=1)
         loss = loss_func(logits,label)
@@ -47,8 +47,8 @@ def eval_classifier(dataloader,classifier,config,train=False,ret=False):
 
 
 def eval_classifier2(dataloader,classifier,config,train=False,ret=False):
-    if os.path.exists(config.saved_path+"/classifier2.pt") and train==False:
-        classifier.load_state_dict(torch.load(config.saved_path+"/classifier2.pt"))
+    if os.path.exists(config.saved_path+"/classifier_222.pt") and train==False:
+        classifier.load_state_dict(torch.load(config.saved_path+"/classifier_222.pt"))
     classifier.zero_grad()
     total_loss = 0
     total_step = 0
@@ -58,26 +58,25 @@ def eval_classifier2(dataloader,classifier,config,train=False,ret=False):
     classifier.eval()
     loss_func = nn.CrossEntropyLoss()
     for step,example in enumerate(dataloader):
-        pl_ids = example[0]
-        nl_ids = example[1]
-        label = example[2]
-        if config.use_cuda:
-            pl_ids = pl_ids.cuda()
-            nl_ids = nl_ids.cuda()
-            label = label.cuda()
-        logits = classifier(pl_ids,nl_ids)
-        pred = logits.tolist()
-        for p in pred:
-            if p[0]>=config.confidence:
-                p = 1
-            else:
-                p=0
+        inputs_ids = example[0]
+        pl_ids = example[1]
+        nl_ids = example[2]
+        label = example[3]
+        # if config.use_cuda:
+        #     inputs_ids = inputs_ids.cuda()
+        #     pl_ids = pl_ids.cuda()
+        #     nl_ids = nl_ids.cuda()
+        #     label = label.cuda()
+        logits = classifier(inputs_ids,pl_ids,nl_ids)
+        pred = torch.argmax(logits,dim=1)
         loss = loss_func(logits,label)
         total_loss += loss.item()
         total_step += 1
         if config.use_cuda:
+            pred = pred.cpu().tolist()
             label = label.cpu().tolist()
         else:
+            pred = pred.tolist()
             label = label.tolist()
         labels.extend(label)
         preds.extend(pred)
@@ -100,6 +99,7 @@ if __name__ == "__main__":
     dataset = ClassifierDataset2(config,mode='test')
     dataloader = DataLoader(dataset,batch_size=config.eval_batch_size)
     classifier = SimpleCasClassifier()
-    if config.use_cuda:
-        classifier = classifier.cuda()
+    # if config.use_cuda:
+    #     classifier = classifier.cuda()
+    classifier = classifier.to(config.device)
     eval_classifier(dataloader,classifier,config,False,False)

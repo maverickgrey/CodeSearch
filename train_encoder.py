@@ -16,9 +16,9 @@ def train_encoder(train_dataloader,eval_dataloader,encoder,config):
   if not os.path.exists(config.saved_path):
     os.makedirs(config.saved_path)
 
-  if config.use_cuda:
-    encoder = encoder.cuda()
-
+  # if config.use_cuda:
+  #   encoder = encoder.cuda()
+  encoder = encoder.to(config.device)
   encoder.zero_grad()
   optimizer = torch.optim.AdamW(encoder.parameters(),lr=1e-5)
   num_training_steps = len(train_dataloader)*config.encoder_epoches
@@ -39,9 +39,9 @@ def train_encoder(train_dataloader,eval_dataloader,encoder,config):
     for step,example in enumerate(train_dataloader):
       pl_ids = example[0]
       nl_ids = example[1]
-      if config.use_cuda:
-        pl_ids = pl_ids.cuda()
-        nl_ids = nl_ids.cuda()
+      # if config.use_cuda:
+      #   pl_ids = pl_ids.cuda()
+      #   nl_ids = nl_ids.cuda()
       code_vecs,nl_vecs = encoder(pl_ids,nl_ids)
       '''
         对于损失函数的解释：我们使用了余弦相似度为NL对每个PL计算了得分，
@@ -56,10 +56,10 @@ def train_encoder(train_dataloader,eval_dataloader,encoder,config):
       #scores = cos_similarity(nl_vecs,code_vecs)
       scores=(nl_vecs[:,None,:]*code_vecs[None,:,:]).sum(-1)
       # print(scores)
-      labels = torch.arange(code_vecs.shape[0])
+      labels = torch.arange(code_vecs.shape[0],device=config.device)
       # print(labels)
-      if config.use_cuda:
-        labels = labels.cuda()
+      # if config.use_cuda:
+      #   labels = labels.cuda()
       loss = loss_func(scores,labels)
       # print(loss)
       # loss.requires_grad_(True)
@@ -90,9 +90,9 @@ def triplet_train_encoder(encoder,train_dataloader,eval_dataloader,config):
   optimizer = torch.optim.AdamW(encoder.parameters(),1e-5)
   total_loss = 0
   total_step = 0
-  if config.use_cuda:
-    encoder = encoder.cuda()
-
+  # if config.use_cuda:
+  #   encoder = encoder.cuda()
+  encoder = encoder.to(config.device)
   if os.path.exists(config.saved_path+"/encoder3_tuned.pt"):
     logger.info("loading tuned model...")
     encoder.load_state_dict(torch.load(config.saved_path+"/encoder3_tuned.pt"))
@@ -110,10 +110,10 @@ def triplet_train_encoder(encoder,train_dataloader,eval_dataloader,config):
       anchor = example[0]
       positive = example[1]
       negative = example[2]
-      if config.use_cuda:
-        anchor = anchor.cuda()
-        positive = positive.cuda()
-        negative = negative.cuda()
+      # if config.use_cuda:
+      #   anchor = anchor.cuda()
+      #   positive = positive.cuda()
+      #   negative = negative.cuda()
       anchor_vec = encoder(None,anchor)
       positive_vec = encoder(positive,None)
       negative_vec = encoder(negative,None)

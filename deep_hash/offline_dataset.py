@@ -1,8 +1,9 @@
 from torch.utils.data import Dataset,DataLoader
 import json
 import torch
-from ..config_class import Config
+from config_class import Config,DATA_PATH
 from hash_model import HashEncoder
+from pathlib import Path
 
 """
 用于定义代码搜索采用hash加速的offline阶段的一些数据集
@@ -27,13 +28,15 @@ class Alignment(Dataset):
     def load_data(self,mode):
         examples = []
         if mode == 'train':
-            with open("../CodeSearchNet/filtered_data/java_train_part.jsonl",'r') as f:
+            train_path = Path.joinpath(DATA_PATH,"filtered_data","java_train_new.jsonl")
+            with open(train_path,'r') as f:
                 for line in f.readlines():
                     js = json.loads(line)
                     example = self.convert_examples_to_features(js,self.config)
                     examples.append(example)
         else:
-            with open("../CodeSearchNet/filtered_data/java_valid_new.jsonl",'r') as f:
+            eval_path = Path.joinpath(DATA_PATH,"filtered_data","java_valid_new.jsonl")
+            with open(eval_path,'r') as f:
                 for line in f.readlines():
                     js = json.loads(line)
                     example = self.convert_examples_to_features(js,self.config)

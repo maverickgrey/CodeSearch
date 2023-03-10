@@ -15,17 +15,18 @@ class Config:
                 classifier_epoches=3,
                 data_path = DATA_PATH,
                 saved_path = MODEL_PATH,
-                train_batch_size = 2,
+                train_batch_size = 8,
                 eval_batch_size = 2,
                 use_cuda = True,
                 max_seq_length=512,
-                filter_K = 50,
-                final_K = 10,
+                filter_K = 30,
+                final_K = 5,
                 run_way = 'truth',
                 confidence = 0.5,
                 encoder_loss = "triplet",
                 distance_type = "cosine",
-                log_path = LOGS_DIR
+                log_path = LOGS_DIR,
+                device = 'cuda:0'
                 ):
         self.encoder_epoches = encoder_epoches
         self.classifier_epoches=classifier_epoches
@@ -45,4 +46,4 @@ class Config:
         self.encoder_loss = encoder_loss
         self.distance_type = distance_type
         self.log_path = log_path
-
+        self.device = device

@@ -1,13 +1,11 @@
 from config_class import Config
-from model import BiFuncModel
+from model import BiFuncModel,CasEncoder
 from run import load_codebase
 from utils import cos_similarity,get_priliminary,rerank,get_info
 import logging
 import time
 import torch
 import numpy as np
-import json
-
 
 def test2_func():
     config = Config()
@@ -101,7 +99,28 @@ def rerank(query_tokens,pre_results,classifier,config):
       final.append(pre_results[i])
   return final
 
+# async def lll():
+#    print("lll")
+
+# async def zzz():
+#    print("zzz")
+#    await asyncio.sleep(2)
+#    print("zzz end")
+
+# async def run():
+#    f1= zzz()
+#    f2= lll()
+#    await asyncio.gather(f1,f2)
+#    return "lll"
+
+
 if __name__ == "__main__":
-    a = torch.tensor([[1,2],[3,4]],dtype=torch.float)
-    b = a.T
-    print(b)
+  # loop = asyncio.get_event_loop()
+  # loop.run_until_complete(run())
+  # loop.close()
+  config = Config()
+  tokenizer = config.tokenizer
+  text = "如何实现快速排序"
+  t_text = tokenizer.tokenize(text)
+  text_ids = tokenizer.convert_tokens_to_ids(t_text)
+  print(text_ids)

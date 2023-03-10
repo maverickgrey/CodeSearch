@@ -6,6 +6,7 @@ import json
 import os
 import logging
 import time
+from line_profiler import LineProfiler
 
 logging.getLogger().setLevel(logging.INFO)
 # logging.basicConfig(filename="./model_saved/run_log.log",level=logging.INFO)
@@ -15,14 +16,16 @@ def run():
     classifier = SimpleCasClassifier()
     #===================================读取训练好的模型===========================================
     logging.info("开始加载模型...")
-    if os.path.exists(config.saved_path+"/encoder3.pt"):
-        encoder_nl.load_state_dict(torch.load(config.saved_path+"/encoder3.pt"))
+    if os.path.exists(config.saved_path / "encoder3.pt"):
+        encoder_nl.load_state_dict(torch.load(config.saved_path / "encoder3.pt"))
 
-    if os.path.exists(config.saved_path+"/classifier2.pt"):
-        classifier.load_state_dict(torch.load(config.saved_path+"/classifier2.pt"))
-    if config.use_cuda == True:
-        encoder_nl = encoder_nl.cuda()
-        classifier = classifier.cuda()
+    if os.path.exists(config.saved_path / "classifier2.pt"):
+        classifier.load_state_dict(torch.load(config.saved_path / "classifier2.pt"))
+    # if config.use_cuda == True:
+    #     encoder_nl = encoder_nl.cuda()
+    #     classifier = classifier.cuda()
+    encoder_nl = encoder_nl.to(config.device)
+    classifier = classifier.to(config.device)
     # =========================================加载代码库===========================================
     logging.info("正在加载代码库")
     codebase = load_codebase(config.test_path,config.code_vec_path,config)
@@ -76,28 +79,32 @@ def run():
             query_tokens = query.split(' ')
             query_vec = query_to_vec(query,config,encoder_nl).cpu()
             score_time_begin = time.perf_counter()
-            # 计算矩阵乘法时时间开销很小，但之后的步骤开销较大
+            # 计算矩阵乘法时时间开销很小，但计算之后的步骤开销较大
             scores = cos_similarity(query_vec,codebase.code_vecs)
             scores = scores.detach().numpy()
             score_time_end = time.perf_counter()
             pre_time_begin = time.perf_counter()
             pre = get_priliminary(scores,codebase,config)
             pre_time_end = time.perf_counter()
-            rerank_time_begin = time.perf_counter()
+            get_info_time = 0
             # rerank时是时间开销的大头，使用cpu在第一阶段K=30时甚至能占到4-5s，其中的主要开销又来源于生成拼接向量的时候
             for _pre in pre:
-                final = rerank(query_tokens,_pre,classifier,config)
-                get_info(final)
-            rerank_time_end = time.perf_counter()
+                info_time_begin = time.perf_counter()
+                # rerank(query_tokens,_pre,classifier,config)
+                # get_info(final)
+                info_time_end = time.perf_counter()
+                get_info_time += (info_time_end-info_time_begin)
             final_time = time.perf_counter()
             time_cost = (final_time-start_time)
             logging.info("本次查询消耗时间：{}s".format(time_cost))
             with open("logs/run_time.txt",'a') as logs:
                 logs.write("计算相似度矩阵花费:{}s\n".format(score_time_end-score_time_begin))
                 logs.write("获得初排结果花费:{}s\n".format(pre_time_end-pre_time_begin))
-                logs.write("重排结果花费：{}s\n".format(rerank_time_end-rerank_time_begin))
+                logs.write("读取重排结果花费：{}s\n".format(get_info_time))
                 logs.write("本次查询消耗时间：{}s\n\n".format(time_cost))
 
     
 if __name__ == "__main__":
-    run()
+    lp = LineProfiler(run)
+    lp.run('run()')
+    lp.print_stats()
